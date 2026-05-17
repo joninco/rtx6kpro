@@ -339,8 +339,11 @@ explicitly as shown in the launch script above.
 
 ## Results
 
-Results are generated from the benchmark JSON files after the full matrix
-finishes.
+The full matrix below was generated before the FlashInfer-autotune fix and is
+kept as the historical v4 baseline. For current production guidance, use the
+launch recipe above and the targeted FlashInfer-autotune A/B table. Regenerate
+the full matrix with `--enable-flashinfer-autotune` before using the per-profile
+tables below as current production numbers.
 
 <!-- KIMI_RESULTS_START -->
 ### KIMI DCP1 MTP on
