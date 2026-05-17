@@ -113,6 +113,7 @@ exec docker run -d --gpus all --ipc=host --network host --privileged \
   -e KV_CACHE_DTYPE=fp8 \
   -e ATTENTION_BACKEND=TRITON_MLA \
   -e KIMI_DISABLE_MTP="${mtp_disable}" \
+  -e KIMI_ENABLE_FLASHINFER_AUTOTUNE=1 \
   -e HF_HOME=/root/.cache/huggingface \
   -e HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface/hub \
   -e XDG_CACHE_HOME=/cache/jit \
@@ -132,20 +133,24 @@ exec docker run -d --gpus all --ipc=host --network host --privileged \
   -v "${CACHE_ROOT}/torchinductor:/root/.cache/torchinductor" \
   -v "${CACHE_ROOT}/vllm:/root/.cache/vllm" \
   "${IMAGE}" \
-  -lc 'exec /opt/vllm/scripts/run-kimi26-vllm --compilation-config "{\"pass_config\":{\"fuse_rope_kvcache_cat_mla\":true},\"splitting_ops\":[]}"'
+  -lc 'exec /opt/vllm/scripts/run-kimi26-vllm --enable-flashinfer-autotune'
 EOF
 chmod +x /tmp/run-kimi-k26-v4
 ```
 
-2026-05-17 follow-up: the command above is the original v4 measurement recipe.
-For new production runs, prefer removing the explicit `--compilation-config`
-override and use:
+2026-05-17 follow-up: the original v4 measurement recipe forced
+`fuse_rope_kvcache_cat_mla=true`. Production runs should instead use the default
+compile config and enable FlashInfer autotune:
 
 ```bash
--lc 'exec /opt/vllm/scripts/run-kimi26-vllm'
+-lc 'exec /opt/vllm/scripts/run-kimi26-vllm --enable-flashinfer-autotune'
 ```
 
-The explicit `fuse_rope_kvcache_cat_mla=true` override requires
+The current source launcher defaults `KIMI_ENABLE_FLASHINFER_AUTOTUNE=1`; the
+explicit CLI flag is kept here because the already published image predates
+that launcher change.
+
+The old explicit `fuse_rope_kvcache_cat_mla=true` override required
 `splitting_ops=[]`. In this stack that disables piecewise CUDA graphs and
 TRITON_MLA then falls back from `FULL` to `FULL_DECODE_ONLY`. The default path
 keeps `FULL_AND_PIECEWISE` and did not show a repeatable throughput loss in the
@@ -300,12 +305,37 @@ Those are not equivalent knobs. Mechanically carrying the word
 real c1 throughput loss even when the image, draft model, DCP, TRITON_MLA, and
 KV dtype are otherwise matched.
 
-Current interpretation: the underlying no-MTP kernel path is not the cause. The
-remaining likely variables are exact draft checkpoint, fp8 draft quantization,
-and the old-vs-new speculative sampling API. Any further comparison should pin
-the same draft path, the same number of speculative tokens, and the same draft
-sampling mode in both images before treating the gap as a vLLM lineage
-regression.
+Current interpretation: the underlying no-MTP kernel path is not the cause. Any
+further comparison should pin the same draft path, the same number of
+speculative tokens, the same draft sampling mode, and the FlashInfer autotune
+state in both images before treating the gap as a vLLM lineage regression.
+
+## 2026-05-17 MTP c1 Fix: FlashInfer Autotune
+
+The remaining local DCP8+MTP c1 gap was traced to FlashInfer autotune being
+disabled in the v4 launcher while the 2026-04-24 baseline enabled it. Re-enabling
+it on the same v4 image closed the local gap without changing the draft model,
+sampler mode, NCCL transport, DCP, TRITON_MLA, or fp8 KV cache.
+
+Artifacts:
+
+```bash
+/root/bench-results/kimi-mtp-v4-focus-20260517/v4-autotune-dcp8-mtp3-warmup3-kimi-30s
+```
+
+Repeated c1 runs, 30 seconds per cell:
+
+| Profile | 0/c1 reps | 0/c1 mean | 128k/c1 reps | 128k/c1 mean |
+|---|---:|---:|---:|---:|
+| v4 default, FlashInfer autotune off | 89.1, 88.9, 85.3 | 87.8 | 61.7, 65.0, 61.3 | 62.7 |
+| v4 default, FlashInfer autotune on | 90.0, 91.6, 91.3 | 91.0 | 65.2, 64.1, 63.3 | 64.2 |
+| 0424 baseline, same local fp8 draft | 88.0, 91.8, 91.6 | 90.5 | 63.5, 63.0, 62.2 | 62.9 |
+
+Conclusion: for Kimi v4 production, keep the default `FULL_AND_PIECEWISE`
+compile path, do not force `fuse_rope_kvcache_cat_mla`, and enable FlashInfer
+autotune. Current source launcher default is `KIMI_ENABLE_FLASHINFER_AUTOTUNE=1`;
+for the already published Docker image, pass `--enable-flashinfer-autotune`
+explicitly as shown in the launch script above.
 
 ## Results
 
