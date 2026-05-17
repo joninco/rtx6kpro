@@ -16,6 +16,7 @@ Current candidates:
 
 | variant | FP8_PB_WO expert layers | W8 KLD | W42 KLD | model memory / rank | KV tokens |
 |---|---|---:|---:|---:|---:|
+| baseline | none, Luke NVFP4 W4A16 | 0.065626 | 0.068724 | 39.27 GiB | 784960 |
 | lower-memory | `51-62` | 0.049443 | 0.056918 | 45.30 GiB | 679872 |
 | middle | `45-47,51-62` | 0.044499 | 0.054121 | 46.77 GiB | 654080 |
 | middle+ | `42-47,51-62` | 0.043555 | 0.051939 | 48.25 GiB | 628224 |
