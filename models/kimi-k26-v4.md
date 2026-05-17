@@ -137,6 +137,20 @@ EOF
 chmod +x /tmp/run-kimi-k26-v4
 ```
 
+2026-05-17 follow-up: the command above is the original v4 measurement recipe.
+For new production runs, prefer removing the explicit `--compilation-config`
+override and use:
+
+```bash
+-lc 'exec /opt/vllm/scripts/run-kimi26-vllm'
+```
+
+The explicit `fuse_rope_kvcache_cat_mla=true` override requires
+`splitting_ops=[]`. In this stack that disables piecewise CUDA graphs and
+TRITON_MLA then falls back from `FULL` to `FULL_DECODE_ONLY`. The default path
+keeps `FULL_AND_PIECEWISE` and did not show a repeatable throughput loss in the
+targeted A/B below.
+
 Examples:
 
 ```bash
@@ -195,6 +209,103 @@ Result directory:
 ```bash
 /root/bench-results/kimi-v4-full-68b3569f-20260514
 ```
+
+## 2026-05-17 MLA Fusion A/B
+
+Targeted A/B on the same v4 image tested the original
+`fuse_rope_kvcache_cat_mla=true` recipe against the default compile config. All
+runs used Kimi-K2.6, TRITON_MLA, fp8 KV cache, patched NCCL PR2127, and the same
+runtime environment. Artifacts are stored in:
+
+```bash
+/root/bench-results/kimi-fuse-mla-ab-20260517
+```
+
+Compile mode observed in startup logs:
+
+| Mode | Launch difference | Observed compile mode |
+|---|---|---|
+| fusion ON | `fuse_rope_kvcache_cat_mla=true`, `splitting_ops=[]` | `FULL` downgraded to `FULL_DECODE_ONLY` by TRITON_MLA |
+| fusion OFF | default compile config | `FULL_AND_PIECEWISE` |
+
+No-MTP result:
+
+| Profile | Mode | GPU KV cache | 0/c1 | 0/c8 | 0/c128 | 128k/c1 | 128k/c8 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| DCP8 | fusion ON | 3,812,352 | 76.6 | 283.3 | 1307.3 | 62.2 | 172.3 |
+| DCP8 | fusion OFF | 3,879,296 | 76.7 | 284.4 | 1316.7 | 62.3 | 172.8 |
+| DCP4 | fusion ON | 1,906,240 | 77.7 | 314.1 | 1808.9 | 55.8 | 140.9 |
+| DCP4 | fusion OFF | 1,939,648 | 77.7 | 316.0 | 1827.1 | 55.9 | 140.3 |
+
+MTP result:
+
+| Profile | Mode | GPU KV cache | warm 128k/c1 | 0/c1 | 0/c8 | 0/c128 | 128k/c1 | 128k/c8 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| DCP8 | fusion ON | 2,411,136 | 60.8 | 94.3 | 332.2 | 1131.9 | 66.4 | 163.5 |
+| DCP8 | fusion OFF | 2,639,872 | 62.2 | 89.8 | 334.3 | 1145.3 | 62.9 | 171.3 |
+| DCP4 | fusion ON | 1,205,568 | 58.7 | 100.8 | 394.2 | 1690.1 | 57.2 | 111.0 |
+| DCP4 | fusion OFF | 1,319,936 | 55.6 | 95.6 | 385.7 | 1709.1 | 62.9 | 112.5 |
+
+Conclusion: the fused MLA RoPE+KV cache path does not provide a repeatable
+throughput gain in this setup. It also reduces available KV cache by about 1.7%
+without MTP and about 9.5% with MTP because it changes the CUDA graph mode. Keep
+the default `FULL_AND_PIECEWISE` path for production unless a future fused path
+can preserve piecewise graphs or show a clear repeated win.
+
+## 2026-05-17 MTP Regression Notes
+
+Follow-up runs compared the v4 image against the 2026-04-24 baseline for
+DCP8, MTP=3, TRITON_MLA, fp8 KV, and the same local fp8 draft model:
+
+```bash
+/root/bench-results/kimi-mtp-regression-20260517
+/root/bench-results/kimi-mtp-localargmax-20260517
+```
+
+The repeated local c1 result does not reproduce the large 18-19% MTP deficit
+reported in one external comparison:
+
+| Profile | 0/c1 reps | 0/c1 mean | 128k/c1 reps | 128k/c1 mean |
+|---|---:|---:|---:|---:|
+| v4, same fp8 draft, greedy draft sampling | 86.7, 89.0, 85.3 | 87.0 | 66.6, 65.5, 69.3 | 67.2 |
+| 0424, same fp8 draft, legacy probabilistic config | 88.2, 93.1, 93.2 | 91.5 | 71.6, 66.2, 69.1 | 69.0 |
+| v4, experimental Eagle3 local-argmax patch | 86.5, 90.6 | 88.6 | 65.7, 67.7 | 66.7 |
+
+The experimental local-argmax patch added `get_top_tokens()` to
+`Eagle3DeepseekV2ForCausalLM` and skipped the draft-to-target vocab remap when
+`draft_vocab_size == target_vocab_size`. Startup logs confirmed:
+
+```text
+Using local argmax reduction for draft token generation
+```
+
+This removes the full-logits-gather warning and is a real inefficiency fix, but
+it did not materially change sustained c1 throughput in this test. It therefore
+does not explain the reported large v4-vs-0424 MTP gap by itself.
+
+The biggest local config trap is the meaning of `probabilistic`:
+
+| Profile | 0/c1 | 0/c8 | 0/c128 | 128k/c1 | 128k/c8 |
+|---|---:|---:|---:|---:|---:|
+| v4, same fp8 draft, default greedy draft sampling | 88.5 | 347.7 | 1220.8 | 61.8 | 158.7 |
+| v4, same fp8 draft, `draft_sample_method=probabilistic` | 77.2 | 341.2 | 1142.3 | 63.4 | 159.3 |
+| 0424, same fp8 draft, legacy `rejection_sample_method=probabilistic` | 92.2 | 375.1 | 1204.6 | 75.3 | 164.9 |
+
+In 0424, `rejection_sample_method=probabilistic` selects the legacy rejection
+mode while the drafter still follows the old greedy token proposal path. In v4,
+`draft_sample_method=probabilistic` changes the drafter hot path: it samples
+from draft logits and carries full draft probabilities into rejection sampling.
+Those are not equivalent knobs. Mechanically carrying the word
+`probabilistic` from the 0424 config into the v4 config can therefore create a
+real c1 throughput loss even when the image, draft model, DCP, TRITON_MLA, and
+KV dtype are otherwise matched.
+
+Current interpretation: the underlying no-MTP kernel path is not the cause. The
+remaining likely variables are exact draft checkpoint, fp8 draft quantization,
+and the old-vs-new speculative sampling API. Any further comparison should pin
+the same draft path, the same number of speculative tokens, and the same draft
+sampling mode in both images before treating the gap as a vLLM lineage
+regression.
 
 ## Results
 
