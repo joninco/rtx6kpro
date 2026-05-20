@@ -12,7 +12,7 @@ and PCIe custom allreduce disabled.
 ## Image
 
 ```bash
-voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm42caa6d38-20260520
+voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm0f5c4cc2-20260520
 ```
 
 Image metadata:
@@ -26,7 +26,7 @@ Image metadata:
 | NCCL | `local-inference-lab/nccl-canonical`, branch `canonical/cu132-nccl2304-amd-noxml`, version `2.30.4` |
 | vLLM repo | `https://github.com/voipmonitor/vllm.git` |
 | vLLM branch | `codex/glm-kimi-upstream-rebase-20260519` |
-| vLLM commit | `42caa6d38c022d13a494b44c8c64b7bdb0a52019` |
+| vLLM commit | `0f5c4cc2d9f050f4e66528677b7411d92072c636` |
 | local-inference branch mirror | `https://github.com/local-inference-lab/vllm/tree/dev/kimi-v5-cu132-upstream-rebase` |
 | FlashInfer | `flashinfer-ai/flashinfer`, branch `main`, commit `9035311e975a6aeb2d229f5162e999dfb7c9a733` |
 | B12X | `local-inference-lab/b12x`, branch `codex/glm51-kimi-b12x-a16-cpuhangfix-cutedsl45-20260512`, commit `c929144c7689668b07ca65af10ceadf1c745165d` |
@@ -42,19 +42,20 @@ git pull --ff-only
 # Optional exact Dockerfile repo pin used for this page:
 git checkout 4f5a95384446ef9c1b966a456cc12fff5db0999b
 
-IMAGE=voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm42caa6d38-20260520
+IMAGE=voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm0f5c4cc2-20260520
 
-MAX_JOBS=128 VLLM_MAX_JOBS=128 NVCC_THREADS=1 VLLM_NVCC_THREADS=1 DOCKER_BUILDKIT=1 docker build \
-  --build-arg MAX_JOBS=128 \
-  --build-arg VLLM_MAX_JOBS=128 \
-  --build-arg NVCC_THREADS=1 \
-  --build-arg VLLM_NVCC_THREADS=1 \
-  --build-arg VLLM_REF=codex/glm-kimi-upstream-rebase-20260519 \
-  --build-arg LAUNCHER_REF=codex/glm-kimi-upstream-rebase-20260519 \
-  --build-arg VLLM_BUILD_VERSION=0.20.2+glmkimi.upstreamrebase.cu132.42caa6d38.20260520 \
-  --progress=plain \
-  -f Dockerfile.glm-kimi-cu132 \
-  -t "$IMAGE" .
+IMAGE="$IMAGE" \
+MAX_JOBS=128 VLLM_MAX_JOBS=128 NVCC_THREADS=1 VLLM_NVCC_THREADS=1 \
+VLLM_REF=codex/glm-kimi-upstream-rebase-20260519 \
+VLLM_COMMIT=0f5c4cc2d9f050f4e66528677b7411d92072c636 \
+LAUNCHER_REF=codex/glm-kimi-upstream-rebase-20260519 \
+LAUNCHER_COMMIT=0f5c4cc2d9f050f4e66528677b7411d92072c636 \
+FLASHINFER_REF=main \
+FLASHINFER_COMMIT=9035311e975a6aeb2d229f5162e999dfb7c9a733 \
+B12X_REF=codex/glm51-kimi-b12x-a16-cpuhangfix-cutedsl45-20260512 \
+B12X_COMMIT=c929144c7689668b07ca65af10ceadf1c745165d \
+VLLM_BUILD_VERSION=0.20.2+glmkimi.upstreamrebase.cu132.0f5c4cc2.20260520 \
+./build-glm-kimi-cu132.sh
 ```
 
 Verify after build:
@@ -70,13 +71,13 @@ docker image inspect "$IMAGE" --format '{{json .Config.Labels}}' | python3 -m js
 | Area | v4 | v5 |
 |---|---|---|
 | CUDA stack | CUDA 13.0/13.1-era image family | CUDA 13.2.1, cuDNN 9.20, PyTorch 2.12.0+cu132 |
-| vLLM base | Older GLM/Kimi rebase branch | Rebased onto newer upstream vLLM, commit `42caa6d38` image |
+| vLLM base | Older GLM/Kimi rebase branch | Rebased onto newer upstream vLLM, commit `0f5c4cc2` image |
 | NCCL | Patched PR2127-style no-XML NCCL 2.30.3 | Canonical no-XML NCCL 2.30.4, `libnccl-local-inference.so.2.30.4` |
 | model runner | Previous runner path | V2 model runner enabled with `VLLM_USE_V2_MODEL_RUNNER=1` |
 | FlashInfer | Earlier git revision and partial autotune coverage | FlashInfer main plus vLLM warmup/autotune bucket patches |
 | MTP correctness | Production-style fast speculative path was acceptable for greedy-style decode, but stochastic correctness was ambiguous | Default v5 recipe uses probabilistic draft sampling plus full p/q rejection correction |
 | allreduce | v4 production generally used vLLM C++ PCIe custom allreduce | v5 default is AR off because the measured DCP8 and mixed DCP1 profile is faster or safer with NCCL fallback |
-| reasoning/tool parser | Optional or image dependent | V2 runbook intentionally bypasses the image launcher and does not enable `--reasoning-parser`; the launcher currently adds it and V2 rejects that combination |
+| reasoning/tool parser | Optional or image dependent | V2 now supports serving-layer `--reasoning-parser kimi_k2`; tool calls require `--tool-call-parser kimi_k2 --enable-auto-tool-choice` |
 
 ## MTP Policy
 
@@ -118,9 +119,9 @@ Practical meaning:
   throughput.
 
 The important runtime detail is that the image launcher has a simpler default
-MTP config and currently enables the Kimi reasoning parser. The v5 V2 recipe
-below bypasses the launcher, calls `/opt/venv/bin/vllm serve` directly, and
-passes the measured `KIMI_SPEC_CONFIG` explicitly.
+MTP config. The v5 V2 recipe below bypasses the launcher, calls
+`/opt/venv/bin/vllm serve` directly, enables the Kimi reasoning and tool-call
+parsers explicitly, and passes the measured `KIMI_SPEC_CONFIG`.
 
 ## Allreduce Policy
 
@@ -167,7 +168,7 @@ cat >/tmp/run-kimi-k26-v5 <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE="${IMAGE:-voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm42caa6d38-20260520}"
+IMAGE="${IMAGE:-voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm0f5c4cc2-20260520}"
 NAME="${NAME:-kimi-k26-v5}"
 PORT="${PORT:-8402}"
 DCP="${DCP:-8}"
@@ -260,6 +261,9 @@ exec /opt/venv/bin/vllm serve '${MODEL_PATH}' \
   --kv-cache-dtype fp8 \
   --enable-flashinfer-autotune \
   --max-cudagraph-capture-size 512 \
+  --reasoning-parser kimi_k2 \
+  --tool-call-parser kimi_k2 \
+  --enable-auto-tool-choice \
   "\${spec_args[@]}"
 RUN_EOF
 )"
@@ -287,13 +291,54 @@ docker logs kimi-k26-v5 2>&1 | rg 'Application startup complete|GPU KV cache siz
 Expected checks:
 
 ```text
-vLLM version includes 0.20.2+glmkimi.upstreamrebase.cu132.42caa6d38.20260520
+vLLM version includes 0.20.2+glmkimi.upstreamrebase.cu132.0f5c4cc2.20260520
 decode_context_parallel_size=<DCP>
 speculative_config includes festr2/kimi-k2.6-eagle3-mla-fp8 when MTP=1
 Custom allreduce is disabled when VLLM_ENABLE_PCIE_ALLREDUCE=0
-No reasoning parser is present in non-default args for this V2 profile
+structured_outputs_config includes reasoning_parser='kimi_k2'
+tool_call_parser is kimi_k2 and auto tool choice is enabled
 Application startup complete.
 ```
+
+Reasoning and tool-call smoke test:
+
+```bash
+curl -fsS http://127.0.0.1:8402/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "Kimi-K2.6",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Use the weather tool to get the current weather in Prague. Do not answer in text; call the tool."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "description": "Get current weather for a city.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {"type": "string"},
+              "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}
+            },
+            "required": ["city"]
+          }
+        }
+      }
+    ],
+    "tool_choice": "auto",
+    "temperature": 0,
+    "max_tokens": 256
+  }' | jq '.choices[0].finish_reason, .choices[0].message.reasoning, .choices[0].message.tool_calls'
+```
+
+Expected result: `finish_reason` is `tool_calls`, `message.reasoning` is
+populated, `message.content` is `null`, and the tool call arguments are clean
+JSON, for example `{"city":"Prague"}`.
 
 ## Docker Compose
 
@@ -304,7 +349,7 @@ environment variables so the same compose file can run DCP1/2/4/8 and MTP on/off
 cat >/tmp/kimi-k26-v5.compose.yaml <<'EOF'
 services:
   kimi-k26-v5:
-    image: ${IMAGE:-voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm42caa6d38-20260520}
+    image: ${IMAGE:-voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm0f5c4cc2-20260520}
     container_name: ${NAME:-kimi-k26-v5}
     network_mode: host
     ipc: host
@@ -339,6 +384,9 @@ services:
         --kv-cache-dtype fp8 \
         --enable-flashinfer-autotune \
         --max-cudagraph-capture-size 512 \
+        --reasoning-parser kimi_k2 \
+        --tool-call-parser kimi_k2 \
+        --enable-auto-tool-choice \
         "$${spec_args[@]}"
     volumes:
       - ${HOME}/.cache/huggingface:/root/.cache/huggingface
@@ -445,6 +493,14 @@ Result directory:
 /root/bench-results/kimi-v5-limited-matrix-42caa6d38-20260520
 ```
 
+These limited numbers were collected on the previous v5 image
+`voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm42caa6d38-20260520`.
+The current recommended runtime image is
+`voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm0f5c4cc2-20260520`;
+the code delta is serving-parser enablement for V2, not a model-runner
+performance change. Re-run the matrix on `0f5c4cc2` before publishing final
+throughput numbers.
+
 The DCP8/MTP=1 row was remeasured once after the initial sweep because the
 first `0/c1` value looked low. That rerun is stored in:
 
@@ -497,9 +553,14 @@ all profiles in this limited sweep.
 - Persistent cache mounts matter. Keep `/cache/jit`, Triton, TorchInductor,
   CUTE DSL, and vLLM cache directories mounted across restarts to avoid repeated
   compile/autotune cost.
-- This V2 runbook intentionally does not enable `--reasoning-parser kimi_k2`.
-  The current image launcher enables it, but V2 rejects that combination with
-  reasoning budget enforcement enabled.
+- This V2 runbook intentionally enables `--reasoning-parser kimi_k2`,
+  `--tool-call-parser kimi_k2`, and `--enable-auto-tool-choice`. Reasoning
+  parsing is supported in image `vllm0f5c4cc2`; request-level
+  `thinking_token_budget` remains unsupported in V2.
+- Tool calls are validated with `tool_choice="auto"`. Forced named
+  `tool_choice` is not the recommended Kimi smoke-test path because the current
+  vLLM serving path can wrap the raw Kimi tool-call marker body into
+  `arguments`.
 - For acceptance-rate work, use the same draft model and the same
   `KIMI_SPEC_CONFIG`. The launcher default draft is not the v5 measured fp8
   draft.
