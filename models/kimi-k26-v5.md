@@ -70,7 +70,7 @@ docker image inspect "$IMAGE" --format '{{json .Config.Labels}}' | python3 -m js
 | FlashInfer | Earlier git revision and partial autotune coverage | FlashInfer main plus vLLM warmup/autotune bucket patches |
 | MTP correctness | Production-style fast speculative path was acceptable for greedy-style decode, but stochastic correctness was ambiguous | Default v5 recipe uses probabilistic draft sampling plus full p/q rejection correction |
 | allreduce | v4 production generally used vLLM C++ PCIe custom allreduce | v5 default is AR off because the measured DCP8 and mixed DCP1 profile is faster or safer with NCCL fallback |
-| reasoning/tool parser | Optional or image dependent | Launcher includes `--tool-call-parser kimi_k2`, `--enable-auto-tool-choice`, and `--reasoning-parser kimi_k2` |
+| reasoning/tool parser | Optional or image dependent | V2 runbook intentionally bypasses the image launcher and does not enable `--reasoning-parser`; the launcher currently adds it and V2 rejects that combination |
 
 ## MTP Policy
 
@@ -112,7 +112,9 @@ Practical meaning:
   throughput.
 
 The important runtime detail is that the image launcher has a simpler default
-MTP config. For the v5 recipe below, always pass `KIMI_SPEC_CONFIG` explicitly.
+MTP config and currently enables the Kimi reasoning parser. The v5 V2 recipe
+below bypasses the launcher, calls `/opt/venv/bin/vllm serve` directly, and
+passes the measured `KIMI_SPEC_CONFIG` explicitly.
 
 ## Allreduce Policy
 
@@ -222,10 +224,39 @@ exec docker run -d --gpus '"device=0,1,2,3,4,5,6,7"' \
   -e ENABLE_PREFIX_CACHING=1 \
   -e ENABLE_CHUNKED_PREFILL=1 \
   -e ENABLE_ASYNC_SCHEDULING=1 \
-  -e KIMI_DISABLE_MTP="${mtp_disable}" \
-  -e KIMI_ENABLE_FLASHINFER_AUTOTUNE=1 \
-  -e KIMI_SPEC_CONFIG="${SPEC_CONFIG}" \
-  "${IMAGE}"
+  --entrypoint /bin/bash \
+  "${IMAGE}" \
+  -lc "$(cat <<RUN_EOF
+set -euo pipefail
+spec_args=()
+if [[ "${mtp_disable}" != "1" ]]; then
+  spec_args+=(--speculative-config '${SPEC_CONFIG}')
+fi
+exec /opt/venv/bin/vllm serve '${MODEL_PATH}' \
+  --served-model-name Kimi-K2.6 \
+  --trust-remote-code \
+  --host 0.0.0.0 \
+  --port '${PORT}' \
+  --tensor-parallel-size 8 \
+  --pipeline-parallel-size 1 \
+  --decode-context-parallel-size '${DCP}' \
+  --enable-chunked-prefill \
+  --enable-prefix-caching \
+  --load-format fastsafetensors \
+  --async-scheduling \
+  --gpu-memory-utilization '${GPU_MEM}' \
+  --max-model-len 262144 \
+  --max-num-batched-tokens 8192 \
+  --max-num-seqs 128 \
+  --mm-processor-cache-gb 0 \
+  --mm-encoder-tp-mode weights \
+  --attention-backend TRITON_MLA \
+  --kv-cache-dtype fp8 \
+  --enable-flashinfer-autotune \
+  --max-cudagraph-capture-size 512 \
+  "\${spec_args[@]}"
+RUN_EOF
+)"
 EOF
 chmod +x /tmp/run-kimi-k26-v5
 ```
@@ -254,6 +285,7 @@ vLLM version includes 0.20.2+glmkimi.upstreamrebase.cu132.42caa6d38.20260520
 decode_context_parallel_size=<DCP>
 speculative_config includes festr2/kimi-k2.6-eagle3-mla-fp8 when MTP=1
 Custom allreduce is disabled when VLLM_ENABLE_PCIE_ALLREDUCE=0
+No reasoning parser is present in non-default args for this V2 profile
 Application startup complete.
 ```
 
@@ -272,6 +304,36 @@ services:
     ipc: host
     privileged: true
     gpus: all
+    entrypoint: ["/bin/bash", "-lc"]
+    command: |
+      set -euo pipefail
+      spec_args=()
+      if [[ "$${KIMI_DISABLE_MTP:-0}" != "1" ]]; then
+        spec_args+=(--speculative-config "$${KIMI_SPEC_CONFIG}")
+      fi
+      exec /opt/venv/bin/vllm serve "$${MODEL}" \
+        --served-model-name Kimi-K2.6 \
+        --trust-remote-code \
+        --host 0.0.0.0 \
+        --port "$${PORT}" \
+        --tensor-parallel-size 8 \
+        --pipeline-parallel-size 1 \
+        --decode-context-parallel-size "$${DCP_SIZE}" \
+        --enable-chunked-prefill \
+        --enable-prefix-caching \
+        --load-format fastsafetensors \
+        --async-scheduling \
+        --gpu-memory-utilization "$${GPU_MEMORY_UTILIZATION}" \
+        --max-model-len 262144 \
+        --max-num-batched-tokens 8192 \
+        --max-num-seqs 128 \
+        --mm-processor-cache-gb 0 \
+        --mm-encoder-tp-mode weights \
+        --attention-backend TRITON_MLA \
+        --kv-cache-dtype fp8 \
+        --enable-flashinfer-autotune \
+        --max-cudagraph-capture-size 512 \
+        "$${spec_args[@]}"
     volumes:
       - ${HOME}/.cache/huggingface:/root/.cache/huggingface
       - ${CACHE_ROOT:-/root/.cache/vllm-kimi-k26-v5}/cutlass_dsl:/root/.cache/cutlass_dsl
@@ -401,9 +463,9 @@ The table is intentionally blank until the limited sweep completes.
 - Persistent cache mounts matter. Keep `/cache/jit`, Triton, TorchInductor,
   CUTE DSL, and vLLM cache directories mounted across restarts to avoid repeated
   compile/autotune cost.
-- If output appears split between `reasoning` and `content`, verify whether
-  `--reasoning-parser kimi_k2` is expected for the client path. The launcher
-  enables it by default.
+- This V2 runbook intentionally does not enable `--reasoning-parser kimi_k2`.
+  The current image launcher enables it, but V2 rejects that combination with
+  reasoning budget enforcement enabled.
 - For acceptance-rate work, use the same draft model and the same
   `KIMI_SPEC_CONFIG`. The launcher default draft is not the v5 measured fp8
   draft.
