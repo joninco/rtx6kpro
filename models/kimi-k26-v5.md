@@ -445,22 +445,46 @@ Result directory:
 /root/bench-results/kimi-v5-limited-matrix-42caa6d38-20260520
 ```
 
+The DCP8/MTP=1 row was remeasured once after the initial sweep because the
+first `0/c1` value looked low. That rerun is stored in:
+
+```bash
+/root/bench-results/kimi-v5-rerun-dcp8-mtp1-aroff-20260520
+```
+
 `acc` is the average speculative acceptance rate reported by server metrics for
 that measured cell. For `MTP=0`, acceptance is `0.000` by definition. `N/A`
 means the cell was skipped because it did not fit in KV cache. For `128k/c32`,
 the request would require about 4.26M KV tokens, above the measured capacity of
 all profiles in this limited sweep.
 
-| DCP | MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 1 | 0 | 0.94 | 491,344 | 89.7 | 0.000 | 993.8 | 0.000 | 45.6 | 0.000 | N/A | N/A | AR off, no MTP |
-| 1 | 1 | 0.90 | 320,816 | 134.5 | 0.443 | 1093.2 | 0.323 | 55.5 | 0.247 | N/A | N/A | AR off, p/q MTP |
-| 2 | 0 | 0.94 | 982,688 | 79.2 | 0.000 | 881.0 | 0.000 | 54.4 | 0.000 | N/A | N/A | AR off, no MTP |
-| 2 | 1 | 0.90 | 685,344 | 115.5 | 0.392 | 994.7 | 0.306 | 68.2 | 0.314 | N/A | N/A | AR off, p/q MTP |
-| 4 | 0 | 0.94 | 1,965,376 | 76.1 | 0.000 | 831.3 | 0.000 | 54.8 | 0.000 | N/A | N/A | AR off, no MTP |
-| 4 | 1 | 0.90 | 1,370,688 | 111.2 | 0.321 | 906.5 | 0.359 | 59.7 | 0.287 | N/A | N/A | AR off, p/q MTP |
-| 8 | 0 | 0.94 | 3,930,752 | 74.9 | 0.000 | 693.2 | 0.000 | 60.9 | 0.000 | N/A | N/A | AR off, no MTP |
-| 8 | 1 | 0.90 | 2,566,528 | 93.8 | 0.327 | 656.3 | 0.330 | 67.6 | 0.515 | N/A | N/A | AR off, p/q MTP |
+### DCP 1
+
+| MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 0.94 | 491,344 | 89.7 | 0.000 | 993.8 | 0.000 | 45.6 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 320,816 | 134.5 | 0.443 | 1093.2 | 0.323 | 55.5 | 0.247 | N/A | N/A | AR off, p/q MTP |
+
+### DCP 2
+
+| MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 0.94 | 982,688 | 79.2 | 0.000 | 881.0 | 0.000 | 54.4 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 685,344 | 115.5 | 0.392 | 994.7 | 0.306 | 68.2 | 0.314 | N/A | N/A | AR off, p/q MTP |
+
+### DCP 4
+
+| MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 0.94 | 1,965,376 | 76.1 | 0.000 | 831.3 | 0.000 | 54.8 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 1,370,688 | 111.2 | 0.321 | 906.5 | 0.359 | 59.7 | 0.287 | N/A | N/A | AR off, p/q MTP |
+
+### DCP 8
+
+| MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 0.94 | 3,930,752 | 74.9 | 0.000 | 693.2 | 0.000 | 60.9 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 2,566,528 | 98.4 | 0.333 | 623.8 | 0.346 | 52.6 | 0.525 | N/A | N/A | AR off, p/q MTP, rerun |
 
 ## Notes And Risks
 
