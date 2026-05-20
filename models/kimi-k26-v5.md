@@ -75,13 +75,22 @@ docker image inspect "$IMAGE" --format '{{json .Config.Labels}}' | python3 -m js
 | NCCL | Patched PR2127-style no-XML NCCL 2.30.3 | Canonical no-XML NCCL 2.30.4, `libnccl-local-inference.so.2.30.4` |
 | model runner | Previous runner path | V2 model runner enabled with `VLLM_USE_V2_MODEL_RUNNER=1` |
 | FlashInfer | Earlier git revision and partial autotune coverage | FlashInfer main plus vLLM warmup/autotune bucket patches |
-| MTP correctness | Production-style fast speculative path was acceptable for greedy-style decode, but stochastic correctness was ambiguous | Default v5 recipe uses probabilistic draft sampling plus full p/q rejection correction |
+| MTP correctness | Production-style fast speculative path used verifier-backed speculative decoding | Both greedy/strict and probabilistic draft sampling are lossless in vLLM; v5 default should be chosen by measured acceptance and throughput |
 | allreduce | v4 production generally used vLLM C++ PCIe custom allreduce | v5 default is AR off because the measured DCP8 and mixed DCP1 profile is faster or safer with NCCL fallback |
 | reasoning/tool parser | Optional or image dependent | V2 now supports serving-layer `--reasoning-parser kimi_k2`; tool calls require `--tool-call-parser kimi_k2 --enable-auto-tool-choice` |
 
 ## MTP Policy
 
-The v5 default is the probabilistic p/q path:
+The measured v5 speculative path is verifier-backed and lossless in vLLM. There
+are two relevant draft-sampling modes:
+
+| Mode | Config | Meaning | Tradeoff |
+|---|---|---|---|
+| Greedy/strict | `rejection_sample_method=standard`, `draft_sample_method=greedy` | Draft proposes argmax tokens. The verifier treats the draft distribution as one-hot: accept with target probability of that token, otherwise recover from target distribution with the draft token removed. | Lowest overhead, often fastest. Acceptance depends on how often high-probability target tokens match the draft argmax. |
+| Probabilistic/full-q | `rejection_sample_method=standard`, `draft_sample_method=probabilistic` | Draft samples from its own distribution and caches draft logits/probs so the verifier can use the full `p/q` probability ratio and residual `max(p-q,0)`. | Usually improves acceptance for stochastic draft sampling, but costs extra memory and work for draft logits/probs. |
+
+The current runbook keeps the full-q path explicit while we compare it against
+the greedy/strict path:
 
 ```json
 {
@@ -102,21 +111,28 @@ In this context:
 | `p` | Target Kimi distribution for the next token after applying the request sampling params, for example temperature 1. |
 | `q` | Draft/Eagle distribution for the proposed token after applying the same sampling params. |
 
-The full speculative correction accepts a proposed draft token with probability
-`min(1, p/q)`. If a token is rejected, the replacement token is sampled from the
-residual distribution proportional to `max(p - q, 0)`.
+For probabilistic/full-q draft sampling, the verifier accepts a proposed draft
+token with probability `min(1, p/q)`. If a token is rejected, the replacement
+token is sampled from the residual distribution proportional to `max(p - q, 0)`.
+
+For greedy/strict draft sampling, `q` is one-hot for the proposed draft token.
+That means the accept probability is simply the target probability of the
+proposed draft token, and the recovery distribution is the target distribution
+with that proposed token removed. This is still lossless; it is not a
+"wrong-distribution" mode.
 
 Practical meaning:
 
-- With `temperature=0`, greedy target sampling dominates and the difference is
-  mostly about implementation details and acceptance rate.
-- With `temperature=1` or other stochastic sampling, p/q correction preserves
-  the target model distribution. Without it, the draft model can bias the output
-  because accepted draft tokens are not corrected against the target
-  probabilities.
-- The older faster path can be used as a speed experiment, but it is not the
-  v5 default because it trades stochastic-distribution correctness for
-  throughput.
+- With `temperature=0`, greedy target sampling dominates and both modes should
+  produce the same target greedy output up to normal numeric/system effects.
+- With `temperature=1` or other stochastic sampling, both modes are intended to
+  preserve the target model output distribution in vLLM. They can produce
+  different sampled token streams because sampling is stochastic, but neither
+  mode should bias the final distribution if the verifier/recovery path is
+  functioning correctly.
+- If greedy/strict is faster and has equal or better acceptance on Kimi, use it.
+  The reason to keep probabilistic/full-q is empirical acceptance/throughput, not
+  correctness.
 
 The important runtime detail is that the image launcher has a simpler default
 MTP config. The v5 V2 recipe below bypasses the launcher, calls
@@ -544,10 +560,9 @@ all profiles in this limited sweep.
 
 ## Notes And Risks
 
-- The v5 default intentionally favors correctness for stochastic sampling by
-  using the full p/q speculative correction. A faster greedy/standard path can
-  be benchmarked separately, but should not be presented as equivalent for
-  temperature 1 output quality.
+- vLLM documents speculative decoding as lossless up to normal hardware
+  numerical limits. For Kimi v5, choose greedy/strict vs probabilistic/full-q by
+  benchmarked acceptance and throughput, not by output-quality assumptions.
 - `VLLM_ENABLE_PCIE_ALLREDUCE=0` must be set explicitly. The image default still
   enables the older C++ AR path.
 - Persistent cache mounts matter. Keep `/cache/jit`, Triton, TorchInductor,
