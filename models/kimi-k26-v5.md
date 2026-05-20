@@ -34,7 +34,13 @@ Image metadata:
 Build command used for this image family:
 
 ```bash
-cd /tmp/blackwell-llm-docker-inspect
+git clone https://github.com/local-inference-lab/blackwell-llm-docker.git
+cd blackwell-llm-docker
+git checkout codex/glm-kimi-cu132-clean
+git pull --ff-only
+
+# Optional exact Dockerfile repo pin used for this page:
+git checkout 4f5a95384446ef9c1b966a456cc12fff5db0999b
 
 IMAGE=voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm42caa6d38-20260520
 
@@ -439,18 +445,22 @@ Result directory:
 /root/bench-results/kimi-v5-limited-matrix-42caa6d38-20260520
 ```
 
-The table is intentionally blank until the limited sweep completes.
+`acc` is the average speculative acceptance rate reported by server metrics for
+that measured cell. For `MTP=0`, acceptance is `0.000` by definition. `N/A`
+means the cell was skipped because it did not fit in KV cache. For `128k/c32`,
+the request would require about 4.26M KV tokens, above the measured capacity of
+all profiles in this limited sweep.
 
-| DCP | MTP | GPU mem | KV cache tokens | 0/c1 | 0/c32 | 128k/c1 | 128k/c32 | Notes |
-|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 1 | 0 | 0.94 | TBD | TBD | TBD | TBD | TBD | AR off |
-| 1 | 1 | 0.90 | TBD | TBD | TBD | TBD | TBD | AR off, p/q |
-| 2 | 0 | 0.94 | TBD | TBD | TBD | TBD | TBD | AR off |
-| 2 | 1 | 0.90 | TBD | TBD | TBD | TBD | TBD | AR off, p/q |
-| 4 | 0 | 0.94 | TBD | TBD | TBD | TBD | TBD | AR off |
-| 4 | 1 | 0.90 | TBD | TBD | TBD | TBD | TBD | AR off, p/q |
-| 8 | 0 | 0.94 | TBD | TBD | TBD | TBD | TBD | AR off |
-| 8 | 1 | 0.90 | TBD | TBD | TBD | TBD | TBD | AR off, p/q |
+| DCP | MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | 0 | 0.94 | 491,344 | 89.7 | 0.000 | 993.8 | 0.000 | 45.6 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 1 | 0.90 | 320,816 | 134.5 | 0.443 | 1093.2 | 0.323 | 55.5 | 0.247 | N/A | N/A | AR off, p/q MTP |
+| 2 | 0 | 0.94 | 982,688 | 79.2 | 0.000 | 881.0 | 0.000 | 54.4 | 0.000 | N/A | N/A | AR off, no MTP |
+| 2 | 1 | 0.90 | 685,344 | 115.5 | 0.392 | 994.7 | 0.306 | 68.2 | 0.314 | N/A | N/A | AR off, p/q MTP |
+| 4 | 0 | 0.94 | 1,965,376 | 76.1 | 0.000 | 831.3 | 0.000 | 54.8 | 0.000 | N/A | N/A | AR off, no MTP |
+| 4 | 1 | 0.90 | 1,370,688 | 111.2 | 0.321 | 906.5 | 0.359 | 59.7 | 0.287 | N/A | N/A | AR off, p/q MTP |
+| 8 | 0 | 0.94 | 3,930,752 | 74.9 | 0.000 | 693.2 | 0.000 | 60.9 | 0.000 | N/A | N/A | AR off, no MTP |
+| 8 | 1 | 0.90 | 2,566,528 | 93.8 | 0.327 | 656.3 | 0.330 | 67.6 | 0.515 | N/A | N/A | AR off, p/q MTP |
 
 ## Notes And Risks
 
