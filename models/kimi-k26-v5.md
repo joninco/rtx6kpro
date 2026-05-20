@@ -6,13 +6,13 @@ Kimi-K2.6 v5 recipe for the CUDA 13.2 upstream-rebased vLLM stack on the local
 
 The runtime recipe below is intentionally explicit. It is the configuration we
 use for the v5 measurements: vLLM V2 model runner, TRITON_MLA, fp8 target KV,
-fp8 Eagle3 draft KV, probabilistic MTP rejection sampling, FlashInfer autotune,
+fp8 Eagle3 draft KV, standard+greedy verifier-backed MTP, FlashInfer autotune,
 and PCIe custom allreduce disabled.
 
 ## Image
 
 ```bash
-voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm0f5c4cc2-20260520
+voipmonitor/vllm:kimi-v5-cu132-89da7631
 ```
 
 Image metadata:
@@ -26,7 +26,7 @@ Image metadata:
 | NCCL | `local-inference-lab/nccl-canonical`, branch `canonical/cu132-nccl2304-amd-noxml`, version `2.30.4` |
 | vLLM repo | `https://github.com/voipmonitor/vllm.git` |
 | vLLM branch | `codex/glm-kimi-upstream-rebase-20260519` |
-| vLLM commit | `0f5c4cc2d9f050f4e66528677b7411d92072c636` |
+| vLLM commit | `89da7631ebb844d39dcd5abe5265bc20983be69f` |
 | local-inference branch mirror | `https://github.com/local-inference-lab/vllm/tree/dev/kimi-v5-cu132-upstream-rebase` |
 | FlashInfer | `flashinfer-ai/flashinfer`, branch `main`, commit `9035311e975a6aeb2d229f5162e999dfb7c9a733` |
 | B12X | `local-inference-lab/b12x`, branch `codex/glm51-kimi-b12x-a16-cpuhangfix-cutedsl45-20260512`, commit `c929144c7689668b07ca65af10ceadf1c745165d` |
@@ -42,19 +42,19 @@ git pull --ff-only
 # Optional exact Dockerfile repo pin used for this page:
 git checkout 4f5a95384446ef9c1b966a456cc12fff5db0999b
 
-IMAGE=voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm0f5c4cc2-20260520
+IMAGE=voipmonitor/vllm:kimi-v5-cu132-89da7631
 
 IMAGE="$IMAGE" \
 MAX_JOBS=128 VLLM_MAX_JOBS=128 NVCC_THREADS=1 VLLM_NVCC_THREADS=1 \
 VLLM_REF=codex/glm-kimi-upstream-rebase-20260519 \
-VLLM_COMMIT=0f5c4cc2d9f050f4e66528677b7411d92072c636 \
+VLLM_COMMIT=89da7631ebb844d39dcd5abe5265bc20983be69f \
 LAUNCHER_REF=codex/glm-kimi-upstream-rebase-20260519 \
-LAUNCHER_COMMIT=0f5c4cc2d9f050f4e66528677b7411d92072c636 \
+LAUNCHER_COMMIT=89da7631ebb844d39dcd5abe5265bc20983be69f \
 FLASHINFER_REF=main \
 FLASHINFER_COMMIT=9035311e975a6aeb2d229f5162e999dfb7c9a733 \
 B12X_REF=codex/glm51-kimi-b12x-a16-cpuhangfix-cutedsl45-20260512 \
 B12X_COMMIT=c929144c7689668b07ca65af10ceadf1c745165d \
-VLLM_BUILD_VERSION=0.20.2+glmkimi.upstreamrebase.cu132.0f5c4cc2.20260520 \
+VLLM_BUILD_VERSION=0.20.2+glmkimi.v5.cu132.89da7631.20260520 \
 ./build-glm-kimi-cu132.sh
 ```
 
@@ -71,7 +71,7 @@ docker image inspect "$IMAGE" --format '{{json .Config.Labels}}' | python3 -m js
 | Area | v4 | v5 |
 |---|---|---|
 | CUDA stack | CUDA 13.0/13.1-era image family | CUDA 13.2.1, cuDNN 9.20, PyTorch 2.12.0+cu132 |
-| vLLM base | Older GLM/Kimi rebase branch | Rebased onto newer upstream vLLM, commit `0f5c4cc2` image |
+| vLLM base | Older GLM/Kimi rebase branch | Rebased onto newer upstream vLLM, commit `89da7631` image |
 | NCCL | Patched PR2127-style no-XML NCCL 2.30.3 | Canonical no-XML NCCL 2.30.4, `libnccl-local-inference.so.2.30.4` |
 | model runner | Previous runner path | V2 model runner enabled with `VLLM_USE_V2_MODEL_RUNNER=1` |
 | FlashInfer | Earlier git revision and partial autotune coverage | FlashInfer main plus vLLM warmup/autotune bucket patches |
@@ -89,8 +89,11 @@ are two relevant draft-sampling modes:
 | Greedy/strict | `rejection_sample_method=standard`, `draft_sample_method=greedy` | Draft proposes argmax tokens. The verifier treats the draft distribution as one-hot: accept with target probability of that token, otherwise recover from target distribution with the draft token removed. | Lowest overhead, often fastest. Acceptance depends on how often high-probability target tokens match the draft argmax. |
 | Probabilistic/full-q | `rejection_sample_method=standard`, `draft_sample_method=probabilistic` | Draft samples from its own distribution and caches draft logits/probs so the verifier can use the full `p/q` probability ratio and residual `max(p-q,0)`. | Usually improves acceptance for stochastic draft sampling, but costs extra memory and work for draft logits/probs. |
 
-The current runbook keeps the full-q path explicit while we compare it against
-the greedy/strict path:
+The current runbook uses standard+greedy. On the DCP8 `cc1/ctx0` 5-run A/B,
+standard+greedy averaged `102.7 tok/s` with `0.339` acceptance, while
+probabilistic/full-q averaged `98.3 tok/s` with `0.331` acceptance. That makes
+standard+greedy the default until a workload shows probabilistic/full-q winning
+on both acceptance and throughput.
 
 ```json
 {
@@ -100,7 +103,7 @@ the greedy/strict path:
   "draft_attention_backend": "TRITON_MLA",
   "draft_kv_cache_dtype": "fp8",
   "rejection_sample_method": "standard",
-  "draft_sample_method": "probabilistic"
+  "draft_sample_method": "greedy"
 }
 ```
 
@@ -148,7 +151,7 @@ VLLM_ENABLE_PCIE_ALLREDUCE=0
 ```
 
 Reason: the v5 AR screen showed AR-off is the best DCP8 setting for the target
-V2 + probabilistic MTP profile. DCP1 has one narrow long-context case where the
+V2 + MTP profile. DCP1 has one narrow long-context case where the
 old v4 C++ AR policy can win slightly, but its short-context loss is larger.
 The default therefore stays AR-off until a later workload-specific AR policy is
 proven across the full matrix.
@@ -163,13 +166,13 @@ Use these profile values unless doing a strict A/B:
 
 | Profile | `DCP` | `MTP` | `GPU_MEM` | Notes |
 |---|---:|---:|---:|---|
-| DCP1 + MTP | 1 | 1 | 0.90 | v5 p/q speculative profile |
+| DCP1 + MTP | 1 | 1 | 0.90 | v5 standard+greedy speculative profile |
 | DCP1 no-MTP | 1 | 0 | 0.94 | target-only baseline, larger KV |
-| DCP2 + MTP | 2 | 1 | 0.90 | v5 p/q speculative profile |
+| DCP2 + MTP | 2 | 1 | 0.90 | v5 standard+greedy speculative profile |
 | DCP2 no-MTP | 2 | 0 | 0.94 | target-only baseline, larger KV |
-| DCP4 + MTP | 4 | 1 | 0.90 | v5 p/q speculative profile |
+| DCP4 + MTP | 4 | 1 | 0.90 | v5 standard+greedy speculative profile |
 | DCP4 no-MTP | 4 | 0 | 0.94 | target-only baseline, larger KV |
-| DCP8 + MTP | 8 | 1 | 0.90 | primary v5 long-context profile |
+| DCP8 + MTP | 8 | 1 | 0.90 | primary v5 standard+greedy long-context profile |
 | DCP8 no-MTP | 8 | 0 | 0.94 | target-only baseline, larger KV |
 
 If you need an exact MTP on/off A/B at identical memory pressure, set
@@ -184,7 +187,7 @@ cat >/tmp/run-kimi-k26-v5 <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE="${IMAGE:-voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm0f5c4cc2-20260520}"
+IMAGE="${IMAGE:-voipmonitor/vllm:kimi-v5-cu132-89da7631}"
 NAME="${NAME:-kimi-k26-v5}"
 PORT="${PORT:-8402}"
 DCP="${DCP:-8}"
@@ -193,7 +196,7 @@ GPU_MEM="${GPU_MEM:-0.90}"
 CACHE_ROOT="${CACHE_ROOT:-${HOME}/.cache/vllm-kimi-k26-v5}"
 MODEL_PATH="${MODEL_PATH:-${HOME}/.cache/huggingface/hub/models--moonshotai--Kimi-K2.6/snapshots/b5aabbfb20227ed42becbf5541dbffd213942c58}"
 
-SPEC_CONFIG='{"model":"festr2/kimi-k2.6-eagle3-mla-fp8","method":"eagle3","num_speculative_tokens":3,"draft_attention_backend":"TRITON_MLA","draft_kv_cache_dtype":"fp8","rejection_sample_method":"standard","draft_sample_method":"probabilistic"}'
+SPEC_CONFIG='{"model":"festr2/kimi-k2.6-eagle3-mla-fp8","method":"eagle3","num_speculative_tokens":3,"draft_attention_backend":"TRITON_MLA","draft_kv_cache_dtype":"fp8","rejection_sample_method":"standard","draft_sample_method":"greedy"}'
 
 mkdir -p \
   "${CACHE_ROOT}/cutlass_dsl" \
@@ -290,7 +293,7 @@ chmod +x /tmp/run-kimi-k26-v5
 Examples:
 
 ```bash
-# Primary v5 profile: DCP8, MTP p/q on, AR off.
+# Primary v5 profile: DCP8, standard+greedy MTP on, AR off.
 PORT=8402 DCP=8 MTP=1 GPU_MEM=0.90 /tmp/run-kimi-k26-v5
 
 # DCP4 target-only baseline.
@@ -307,7 +310,7 @@ docker logs kimi-k26-v5 2>&1 | rg 'Application startup complete|GPU KV cache siz
 Expected checks:
 
 ```text
-vLLM version includes 0.20.2+glmkimi.upstreamrebase.cu132.0f5c4cc2.20260520
+vLLM version includes 0.20.2+glmkimi.v5.cu132.89da7631.20260520
 decode_context_parallel_size=<DCP>
 speculative_config includes festr2/kimi-k2.6-eagle3-mla-fp8 when MTP=1
 Custom allreduce is disabled when VLLM_ENABLE_PCIE_ALLREDUCE=0
@@ -365,7 +368,7 @@ environment variables so the same compose file can run DCP1/2/4/8 and MTP on/off
 cat >/tmp/kimi-k26-v5.compose.yaml <<'EOF'
 services:
   kimi-k26-v5:
-    image: ${IMAGE:-voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm0f5c4cc2-20260520}
+    image: ${IMAGE:-voipmonitor/vllm:kimi-v5-cu132-89da7631}
     container_name: ${NAME:-kimi-k26-v5}
     network_mode: host
     ipc: host
@@ -443,7 +446,7 @@ services:
       ENABLE_ASYNC_SCHEDULING: "1"
       KIMI_DISABLE_MTP: ${KIMI_DISABLE_MTP:-0}
       KIMI_ENABLE_FLASHINFER_AUTOTUNE: "1"
-      KIMI_SPEC_CONFIG: '{"model":"festr2/kimi-k2.6-eagle3-mla-fp8","method":"eagle3","num_speculative_tokens":3,"draft_attention_backend":"TRITON_MLA","draft_kv_cache_dtype":"fp8","rejection_sample_method":"standard","draft_sample_method":"probabilistic"}'
+      KIMI_SPEC_CONFIG: '{"model":"festr2/kimi-k2.6-eagle3-mla-fp8","method":"eagle3","num_speculative_tokens":3,"draft_attention_backend":"TRITON_MLA","draft_kv_cache_dtype":"fp8","rejection_sample_method":"standard","draft_sample_method":"greedy"}'
 EOF
 ```
 
@@ -482,7 +485,7 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
   --dcp-size <DCP> \
   --display-mode plain \
   --no-hw-monitor \
-  --output /root/bench-results/kimi-v5-limited-matrix-42caa6d38-20260520/dcp<DCP>-mtp<MTP>.json
+  --output /root/bench-results/kimi-v5-standard-greedy-matrix-89da7631-20260520/dcp<DCP>/mtp<MTP>/result.json
 ```
 
 Full matrix to run later:
@@ -498,10 +501,64 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
   --dcp-size <DCP> \
   --display-mode plain \
   --no-hw-monitor \
-  --output /root/bench-results/kimi-v5-full-matrix-42caa6d38-20260520/dcp<DCP>-mtp<MTP>.json
+  --output /root/bench-results/kimi-v5-full-matrix-89da7631-20260520/dcp<DCP>/mtp<MTP>/result.json
 ```
 
-## Limited Sweep Results
+## Standard+Greedy Limited Sweep Results
+
+Result directory:
+
+```bash
+/root/bench-results/kimi-v5-standard-greedy-matrix-89da7631-20260520
+```
+
+These are the current v5 publishable numbers. They were collected on 2026-05-20
+with 30s sustained decode cells, AR off, V2 model runner, `ctx0` and `ctx128k`,
+`cc1` and `cc32`, and standard+greedy MTP for `MTP=1`.
+
+```bash
+IMAGE=voipmonitor/vllm:kimi-v5-cu132-89da7631 \
+DURATION=30 \
+DCP_LIST="1 2 4 8" \
+MTP_LIST="0 1" \
+/root/run_kimi_v5_standard_greedy_matrix.sh
+```
+
+`acc` is the average speculative acceptance rate reported by server metrics for
+that measured cell. For `MTP=0`, acceptance is `0.000` by definition. `N/A`
+means the cell was skipped because it did not fit in KV cache. For `128k/c32`,
+the request would require about 4.26M KV tokens, above the measured capacity of
+all profiles in this limited sweep.
+
+### DCP 1
+
+| MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 0.94 | 491,344 | 89.7 | 0.000 | 999.4 | 0.000 | 45.5 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 342,672 | 139.4 | 0.385 | 1166.5 | 0.365 | 58.3 | 0.370 | N/A | N/A | AR off, standard+greedy MTP |
+
+### DCP 2
+
+| MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 0.94 | 982,688 | 79.2 | 0.000 | 885.4 | 0.000 | 54.5 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 685,344 | 122.4 | 0.415 | 1050.2 | 0.356 | 71.8 | 0.390 | N/A | N/A | AR off, standard+greedy MTP |
+
+### DCP 4
+
+| MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 0.94 | 1,965,376 | 76.1 | 0.000 | 835.4 | 0.000 | 54.8 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 1,370,688 | 105.8 | 0.265 | 966.3 | 0.391 | 62.0 | 0.417 | N/A | N/A | AR off, standard+greedy MTP |
+
+### DCP 8
+
+| MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0 | 0.94 | 3,930,752 | 74.8 | 0.000 | 688.4 | 0.000 | 60.8 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 2,741,376 | 108.6 | 0.347 | 697.8 | 0.426 | 71.1 | 0.363 | N/A | N/A | AR off, standard+greedy MTP |
+
+## Appendix: Previous Probabilistic/full-q Limited Sweep
 
 Result directory:
 
@@ -509,13 +566,11 @@ Result directory:
 /root/bench-results/kimi-v5-limited-matrix-42caa6d38-20260520
 ```
 
-These limited numbers were collected on the previous v5 image
+These historical numbers were collected on the previous v5 image
 `voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm42caa6d38-20260520`.
 The current recommended runtime image is
-`voipmonitor/vllm:glm-kimi-upstream-rebase-cu132-vllm0f5c4cc2-20260520`;
-the code delta is serving-parser enablement for V2, not a model-runner
-performance change. Re-run the matrix on `0f5c4cc2` before publishing final
-throughput numbers.
+`voipmonitor/vllm:kimi-v5-cu132-89da7631`; the main tables above supersede this
+appendix once the standard+greedy sweep completes.
 
 The DCP8/MTP=1 row was remeasured once after the initial sweep because the
 first `0/c1` value looked low. That rerun is stored in:
@@ -535,28 +590,28 @@ all profiles in this limited sweep.
 | MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
 | 0 | 0.94 | 491,344 | 89.7 | 0.000 | 993.8 | 0.000 | 45.6 | 0.000 | N/A | N/A | AR off, no MTP |
-| 1 | 0.90 | 320,816 | 134.5 | 0.443 | 1093.2 | 0.323 | 55.5 | 0.247 | N/A | N/A | AR off, p/q MTP |
+| 1 | 0.90 | 320,816 | 134.5 | 0.443 | 1093.2 | 0.323 | 55.5 | 0.247 | N/A | N/A | AR off, probabilistic/full-q MTP |
 
 ### DCP 2
 
 | MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
 | 0 | 0.94 | 982,688 | 79.2 | 0.000 | 881.0 | 0.000 | 54.4 | 0.000 | N/A | N/A | AR off, no MTP |
-| 1 | 0.90 | 685,344 | 115.5 | 0.392 | 994.7 | 0.306 | 68.2 | 0.314 | N/A | N/A | AR off, p/q MTP |
+| 1 | 0.90 | 685,344 | 115.5 | 0.392 | 994.7 | 0.306 | 68.2 | 0.314 | N/A | N/A | AR off, probabilistic/full-q MTP |
 
 ### DCP 4
 
 | MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
 | 0 | 0.94 | 1,965,376 | 76.1 | 0.000 | 831.3 | 0.000 | 54.8 | 0.000 | N/A | N/A | AR off, no MTP |
-| 1 | 0.90 | 1,370,688 | 111.2 | 0.321 | 906.5 | 0.359 | 59.7 | 0.287 | N/A | N/A | AR off, p/q MTP |
+| 1 | 0.90 | 1,370,688 | 111.2 | 0.321 | 906.5 | 0.359 | 59.7 | 0.287 | N/A | N/A | AR off, probabilistic/full-q MTP |
 
 ### DCP 8
 
 | MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
 | 0 | 0.94 | 3,930,752 | 74.9 | 0.000 | 693.2 | 0.000 | 60.9 | 0.000 | N/A | N/A | AR off, no MTP |
-| 1 | 0.90 | 2,566,528 | 98.4 | 0.333 | 623.8 | 0.346 | 52.6 | 0.525 | N/A | N/A | AR off, p/q MTP, rerun |
+| 1 | 0.90 | 2,566,528 | 98.4 | 0.333 | 623.8 | 0.346 | 52.6 | 0.525 | N/A | N/A | AR off, probabilistic/full-q MTP, rerun |
 
 ## Notes And Risks
 
@@ -570,8 +625,8 @@ all profiles in this limited sweep.
   compile/autotune cost.
 - This V2 runbook intentionally enables `--reasoning-parser kimi_k2`,
   `--tool-call-parser kimi_k2`, and `--enable-auto-tool-choice`. Reasoning
-  parsing is supported in image `vllm0f5c4cc2`; request-level
-  `thinking_token_budget` remains unsupported in V2.
+  parsing and Kimi tool calls are supported in image `kimi-v5-cu132-89da7631`;
+  request-level `thinking_token_budget` remains unsupported in V2.
 - Tool calls are validated with `tool_choice="auto"`. Forced named
   `tool_choice` is not the recommended Kimi smoke-test path because the current
   vLLM serving path can wrap the raw Kimi tool-call marker body into
