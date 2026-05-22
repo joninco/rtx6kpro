@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-05-22](2026-05/2026-05-22.md) | RTX 6000 Pro price hike ~20% worldwide attributed to DDR7 memory costs; still selling [(jump)](https |
 | [2026-05-21](2026-05/2026-05-21.md) | vLLM PR #40082 merged — FlashInfer b12x backends for SM120/SM121 (RTX Pro 6000 Blackwell / DGX Spa |
 | [2026-05-20](2026-05/2026-05-20.md) | RTX Pro 6000 prices up 30-37% in South Korea and Europe vs. last week; members panic-buying at $9,99 |
 | [2026-05-19](2026-05/2026-05-19.md) | DGX Spark DSv4: 700-800 prefill t/s at 128-200k ctx, 32 t/s decode C=1 MTP=2 [(jump)](https://discor |
@@ -92,6 +93,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-05-22](2026-05/2026-05-22.md) | RTX 6000 Pro price hike ~20% worldwide attributed to DDR7 memory costs; still selling [(jump)](https |
 | [2026-05-21](2026-05/2026-05-21.md) | vLLM PR #40082 merged — FlashInfer b12x backends for SM120/SM121 (RTX Pro 6000 Blackwell / DGX Spa |
 | [2026-05-20](2026-05/2026-05-20.md) | RTX Pro 6000 prices up 30-37% in South Korea and Europe vs. last week; members panic-buying at $9,99 |
 | [2026-05-19](2026-05/2026-05-19.md) | DGX Spark DSv4: 700-800 prefill t/s at 128-200k ctx, 32 t/s decode C=1 MTP=2 [(jump)](https://discor |
