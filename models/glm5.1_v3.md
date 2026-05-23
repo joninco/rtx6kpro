@@ -246,3 +246,32 @@ Note: MTP profiles were measured at `GPU_MEMORY_UTILIZATION=0.855` because
 `0.865` did not leave enough headroom for speculative CUDA graph capture on this
 image.
 
+### A16 Off Comparison
+
+Measured with the same image and launch recipe, except:
+
+```text
+B12X_MOE_FORCE_A16=0
+VLLM_B12X_FORCE_MOE_A16=0
+```
+
+| Profile | GPU memory utilization | KV budget used by benchmark | cc1 ctx0 | cc16 ctx0 |
+|---|---:|---:|---:|---:|
+| DCP1, MTP off | 0.865 | 92,112 | 57.0 tok/s | 409.5 tok/s |
+| DCP1, MTP on | 0.855 | 85,248 | 94.1 tok/s | 541.0 tok/s |
+| DCP4, MTP off | 0.865 | 380,160 | 46.9 tok/s | 311.9 tok/s |
+| DCP4, MTP on | 0.855 | n/a | startup failed | startup failed |
+
+DCP4 + MTP with A16 off failed during startup after mixed prefill/decode graph
+capture and during FULL decode graph capture:
+
+```text
+Failed: Cuda error /opt/vllm/csrc/custom_all_reduce.cuh:525
+'an illegal memory access was encountered'
+```
+
+Result directory on the measured host:
+
+```bash
+/root/bench-results/glm51-w4a16micro-modelopt-cc-a16off-20260523
+```
