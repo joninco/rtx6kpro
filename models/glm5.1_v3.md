@@ -275,3 +275,41 @@ Result directory on the measured host:
 ```bash
 /root/bench-results/glm51-w4a16micro-modelopt-cc-a16off-20260523
 ```
+
+### Luke B12X Allreduce Config, A16 On
+
+Measured with Luke's allreduce profile instead of the default v3 `cpp`
+allreduce profile:
+
+```text
+VLLM_PCIE_ALLREDUCE_BACKEND=b12x
+VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE=64KB
+MAX_CUDAGRAPH_CAPTURE_SIZE=64
+B12X_MOE_FORCE_A16=1
+VLLM_B12X_FORCE_MOE_A16=1
+```
+
+The MTP rows use `GPU_MEMORY_UTILIZATION=0.855`, matching the v3 MTP profile.
+With the pure Luke default `0.825`, DCP1 + MTP did not have enough KV memory for
+`MAX_MODEL_LEN=202752`.
+
+| Profile | GPU memory utilization | KV budget used by benchmark | cc1 ctx0 | cc16 ctx0 |
+|---|---:|---:|---:|---:|
+| DCP1, MTP off | 0.825 | 217,855 | 55.5 tok/s | 411.9 tok/s |
+| DCP1, MTP on | 0.825 | n/a | startup failed | startup failed |
+| DCP1, MTP on | 0.855 | 245,056 | 95.2 tok/s | 613.0 tok/s |
+| DCP4, MTP off | 0.825 | 456,192 | 46.2 tok/s | 316.1 tok/s |
+| DCP4, MTP on | 0.855 | 570,112 | 69.7 tok/s | 426.3 tok/s |
+
+DCP1 + MTP at `GPU_MEMORY_UTILIZATION=0.825` failed before serving:
+
+```text
+To serve at least one request with max seq len 202752, 11.75 GiB KV cache is
+needed, larger than available 11.36 GiB.
+```
+
+Result directory on the measured host:
+
+```bash
+/root/bench-results/glm51-luke-b12x-a16-matrix-20260523
+```
