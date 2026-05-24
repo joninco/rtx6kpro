@@ -42,7 +42,6 @@ services:
       NCCL_P2P_LEVEL: SYS
       NCCL_PROTO: LL,LL128,Simple
       USE_NCCL_XML: "0"
-      NCCL_GRAPH_FILE: ""
       VLLM_NCCL_SO_PATH: /opt/libnccl-local-inference.so.2.30.4
       LD_PRELOAD: /opt/libnccl-local-inference.so.2.30.4
       VLLM_ENABLE_PCIE_ALLREDUCE: "1"
@@ -131,7 +130,6 @@ docker run -d --gpus all --ipc=host --network host --privileged \
   -e NCCL_P2P_LEVEL=SYS \
   -e NCCL_PROTO=LL,LL128,Simple \
   -e USE_NCCL_XML=0 \
-  -e NCCL_GRAPH_FILE= \
   -e VLLM_NCCL_SO_PATH=/opt/libnccl-local-inference.so.2.30.4 \
   -e LD_PRELOAD=/opt/libnccl-local-inference.so.2.30.4 \
   -e VLLM_ENABLE_PCIE_ALLREDUCE=1 \
@@ -245,6 +243,11 @@ Result directory on the measured host:
 Note: MTP profiles were measured at `GPU_MEMORY_UTILIZATION=0.855` because
 `0.865` did not leave enough headroom for speculative CUDA graph capture on this
 image.
+
+Do not set an empty `NCCL_GRAPH_FILE=` with this NCCL stack. On this image it
+can fail during `ncclCommInitRank` with `NCCL error: unhandled system error`
+before model load or CUDA graph capture starts. Leaving the variable unset keeps
+the DCP4 + MTP profile working through full decode graph capture.
 
 ### A16 Off Comparison
 
