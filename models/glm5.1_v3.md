@@ -3,13 +3,19 @@
 Measured on 2026-05-23 on the local 8-GPU RTX PRO 6000 Blackwell host.
 
 This is the current GLM-5.1 v3 recipe for the W4A16 decode fast path with the
-native ModelOpt/NVFP4 checkpoint layout. It uses B12X sparse MLA, B12X MoE with
-A16 forced for decode, GLM MTP support, FP8 KV cache, CUDA 13.2, FlashInfer git,
-and patched local-inference NCCL 2.30.4.
+native ModelOpt/NVFP4 checkpoint layout. The recommended production profile uses
+B12X sparse MLA, B12X MoE with A16 forced for decode, B12X PCIe oneshot
+allreduce, GLM MTP support, FP8 KV cache, CUDA 13.2, FlashInfer git, and patched
+local-inference NCCL 2.30.4.
+
+Recommended default: DCP1 + MTP enabled for maximum decode throughput. Use DCP4
+when larger KV/cache headroom matters more than single-request speed.
 
 ## Docker Compose
 
-Default profile: DCP4, MTP enabled, forced A16 MoE, FP8 KV cache.
+Default profile: DCP1, MTP enabled, forced A16 MoE, B12X PCIe oneshot
+allreduce, FP8 KV cache. `VLLM_USE_V2_MODEL_RUNNER` is explicitly disabled for
+now; the V2 runner is not part of this stable profile.
 
 Set the model snapshot once:
 
@@ -45,31 +51,30 @@ services:
       VLLM_NCCL_SO_PATH: /opt/libnccl-local-inference.so.2.30.4
       LD_PRELOAD: /opt/libnccl-local-inference.so.2.30.4
       VLLM_ENABLE_PCIE_ALLREDUCE: "1"
-      VLLM_PCIE_ALLREDUCE_BACKEND: cpp
-      VLLM_CPP_AR_1STAGE_NCCL_CUTOFF: 56KB
-      VLLM_CPP_AR_IGNORE_CUTOFF_MAX_ROWS: "8"
+      VLLM_PCIE_ALLREDUCE_BACKEND: b12x
+      VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE: 64KB
       VLLM_RTX6K_FUSED_ALLREDUCE_ADD: "0"
       VLLM_RTX6K_FUSED_ALLREDUCE_ADD_END_BARRIER: "1"
       VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: "0"
       VLLM_DISABLED_KERNELS: MarlinFP8ScaledMMLinearKernel
       VLLM_USE_B12X_SPARSE_INDEXER: "1"
-      VLLM_B12X_MLA_DECODE_INLINE_LSE: "1"
       VLLM_B12X_MLA_SPEC_SERIAL_DECODE: "0"
       VLLM_MTP_RETURN_NORMALIZED_HIDDEN: "1"
       VLLM_SPEC_ACCEPT_THRESHOLD_ACC: "1.0"
       VLLM_SPEC_ACCEPT_THRESHOLD_SINGLE: "1.0"
+      VLLM_USE_V2_MODEL_RUNNER: "0"
       B12X_MOE_FORCE_A16: "1"
       VLLM_B12X_FORCE_MOE_A16: "1"
       PORT: "${PORT:-5264}"
       MODEL: /models/GLM-5.1-NVFP4-MTP-NVFP4
       SERVED_MODEL_NAME: GLM-5
       TP_SIZE: "8"
-      DCP_SIZE: "${DCP_SIZE:-4}"
+      DCP_SIZE: "${DCP_SIZE:-1}"
       GPU_MEMORY_UTILIZATION: "${GPU_MEMORY_UTILIZATION:-0.855}"
       MAX_MODEL_LEN: "202752"
       MAX_NUM_BATCHED_TOKENS: "8192"
       MAX_NUM_SEQS: "64"
-      MAX_CUDAGRAPH_CAPTURE_SIZE: "256"
+      MAX_CUDAGRAPH_CAPTURE_SIZE: "${MAX_CUDAGRAPH_CAPTURE_SIZE:-64}"
       KV_CACHE_DTYPE: fp8
       ATTENTION_BACKEND: B12X_MLA_SPARSE
       MOE_BACKEND: b12x
@@ -103,16 +108,19 @@ docker compose -f compose.glm51-v3.yml up -d
 Useful variants:
 
 ```bash
-# DCP1 + MTP
-DCP_SIZE=1 GPU_MEMORY_UTILIZATION=0.855 docker compose -f compose.glm51-v3.yml up -d
+# DCP4 + MTP, larger KV/cache headroom but lower decode throughput
+DCP_SIZE=4 GPU_MEMORY_UTILIZATION=0.855 docker compose -f compose.glm51-v3.yml up -d
+
+# DCP1 without MTP
+GLM51_DISABLE_MTP=1 GPU_MEMORY_UTILIZATION=0.825 docker compose -f compose.glm51-v3.yml up -d
 
 # DCP4 without MTP, larger KV headroom
-DCP_SIZE=4 GLM51_DISABLE_MTP=1 GPU_MEMORY_UTILIZATION=0.865 docker compose -f compose.glm51-v3.yml up -d
+DCP_SIZE=4 GLM51_DISABLE_MTP=1 GPU_MEMORY_UTILIZATION=0.825 docker compose -f compose.glm51-v3.yml up -d
 ```
 
 ## Docker Run
 
-Equivalent non-compose launch for the default DCP4 + MTP profile:
+Equivalent non-compose launch for the default DCP1 + MTP profile:
 
 ```bash
 docker rm -f glm51-v3 >/dev/null 2>&1 || true
@@ -133,31 +141,30 @@ docker run -d --gpus all --ipc=host --network host --privileged \
   -e VLLM_NCCL_SO_PATH=/opt/libnccl-local-inference.so.2.30.4 \
   -e LD_PRELOAD=/opt/libnccl-local-inference.so.2.30.4 \
   -e VLLM_ENABLE_PCIE_ALLREDUCE=1 \
-  -e VLLM_PCIE_ALLREDUCE_BACKEND=cpp \
-  -e VLLM_CPP_AR_1STAGE_NCCL_CUTOFF=56KB \
-  -e VLLM_CPP_AR_IGNORE_CUTOFF_MAX_ROWS=8 \
+  -e VLLM_PCIE_ALLREDUCE_BACKEND=b12x \
+  -e VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE=64KB \
   -e VLLM_RTX6K_FUSED_ALLREDUCE_ADD=0 \
   -e VLLM_RTX6K_FUSED_ALLREDUCE_ADD_END_BARRIER=1 \
   -e VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0 \
   -e VLLM_DISABLED_KERNELS=MarlinFP8ScaledMMLinearKernel \
   -e VLLM_USE_B12X_SPARSE_INDEXER=1 \
-  -e VLLM_B12X_MLA_DECODE_INLINE_LSE=1 \
   -e VLLM_B12X_MLA_SPEC_SERIAL_DECODE=0 \
   -e VLLM_MTP_RETURN_NORMALIZED_HIDDEN=1 \
   -e VLLM_SPEC_ACCEPT_THRESHOLD_ACC=1.0 \
   -e VLLM_SPEC_ACCEPT_THRESHOLD_SINGLE=1.0 \
+  -e VLLM_USE_V2_MODEL_RUNNER=0 \
   -e B12X_MOE_FORCE_A16=1 \
   -e VLLM_B12X_FORCE_MOE_A16=1 \
   -e PORT=5264 \
   -e MODEL=/models/GLM-5.1-NVFP4-MTP-NVFP4 \
   -e SERVED_MODEL_NAME=GLM-5 \
   -e TP_SIZE=8 \
-  -e DCP_SIZE=4 \
+  -e DCP_SIZE=1 \
   -e GPU_MEMORY_UTILIZATION=0.855 \
   -e MAX_MODEL_LEN=202752 \
   -e MAX_NUM_BATCHED_TOKENS=8192 \
   -e MAX_NUM_SEQS=64 \
-  -e MAX_CUDAGRAPH_CAPTURE_SIZE=256 \
+  -e MAX_CUDAGRAPH_CAPTURE_SIZE=64 \
   -e KV_CACHE_DTYPE=fp8 \
   -e ATTENTION_BACKEND=B12X_MLA_SPARSE \
   -e MOE_BACKEND=b12x \
@@ -220,9 +227,76 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
   --no-hw-monitor
 ```
 
-All rows below used forced A16:
+Recommended rows use:
 
 ```text
+VLLM_PCIE_ALLREDUCE_BACKEND=b12x
+VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE=64KB
+B12X_MOE_FORCE_A16=1
+VLLM_B12X_FORCE_MOE_A16=1
+VLLM_USE_V2_MODEL_RUNNER=0
+MAX_CUDAGRAPH_CAPTURE_SIZE=64
+```
+
+| Profile | GPU memory utilization | KV budget used by benchmark | cc1 ctx0 | cc16 ctx0 |
+|---|---:|---:|---:|---:|
+| DCP1, MTP off | 0.825 | 217,855 | 55.5 tok/s | 411.9 tok/s |
+| DCP1, MTP on | 0.825 | n/a | startup failed | startup failed |
+| DCP1, MTP on | 0.855 | 245,056 | 95.2 tok/s | 613.0 tok/s |
+| DCP4, MTP off | 0.825 | 456,192 | 46.2 tok/s | 316.1 tok/s |
+| DCP4, MTP on | 0.855 | 570,112 | 69.7 tok/s | 426.3 tok/s |
+
+Result directory on the measured host:
+
+```bash
+/root/bench-results/glm51-luke-b12x-a16-matrix-20260523
+```
+
+DCP1 + MTP at `GPU_MEMORY_UTILIZATION=0.825` failed before serving:
+
+```text
+To serve at least one request with max seq len 202752, 11.75 GiB KV cache is
+needed, larger than available 11.36 GiB.
+```
+
+Use `GPU_MEMORY_UTILIZATION=0.855` for MTP profiles. Use `0.825` for non-MTP
+profiles unless additional KV headroom is specifically needed and graph capture
+has been revalidated.
+
+Do not set an empty `NCCL_GRAPH_FILE=` with this NCCL stack. On this image it
+can fail during `ncclCommInitRank` with `NCCL error: unhandled system error`
+before model load or CUDA graph capture starts. Leaving the variable unset keeps
+the DCP4 + MTP profile working through full decode graph capture.
+
+### Known Bad: V2 Model Runner
+
+Do not enable the V2 model runner for this profile yet:
+
+```text
+VLLM_USE_V2_MODEL_RUNNER=1
+```
+
+Reproduced on 2026-05-24 with `DCP4 + MTP on + A16 on + b12x allreduce`.
+Startup reached KV cache initialization (`980,224` tokens) and then crashed
+during `Capturing CUDA graphs (FULL)` around `31/33`.
+
+Root stack:
+
+```text
+b12x/attention/mla/api.py:_final_lse_from_split_workspace
+torch.logsumexp(chunk_lse, dim=-1, out=final_lse)
+torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+```
+
+The later NCCL watchdog failure is secondary after the illegal memory access.
+
+### Historical: CPP Allreduce, A16 On
+
+Older v3 rows used the `cpp` PCIe allreduce backend. They are kept only as a
+baseline; the recommended profile above uses `b12x`.
+
+```text
+VLLM_PCIE_ALLREDUCE_BACKEND=cpp
 B12X_MOE_FORCE_A16=1
 VLLM_B12X_FORCE_MOE_A16=1
 ```
@@ -240,16 +314,7 @@ Result directory on the measured host:
 /root/bench-results/glm51-w4a16micro-modelopt-cc-20260523
 ```
 
-Note: MTP profiles were measured at `GPU_MEMORY_UTILIZATION=0.855` because
-`0.865` did not leave enough headroom for speculative CUDA graph capture on this
-image.
-
-Do not set an empty `NCCL_GRAPH_FILE=` with this NCCL stack. On this image it
-can fail during `ncclCommInitRank` with `NCCL error: unhandled system error`
-before model load or CUDA graph capture starts. Leaving the variable unset keeps
-the DCP4 + MTP profile working through full decode graph capture.
-
-### A16 Off Comparison
+### Historical: A16 Off Comparison
 
 Measured with the same image and launch recipe, except:
 
@@ -274,42 +339,4 @@ Result directory on the measured host:
 ```bash
 /root/bench-results/glm51-w4a16micro-modelopt-cc-a16off-20260523
 /root/bench-results/glm51-v3-nographfile-dcp4-mtp-a16off-20260524
-```
-
-### Luke B12X Allreduce Config, A16 On
-
-Measured with Luke's allreduce profile instead of the default v3 `cpp`
-allreduce profile:
-
-```text
-VLLM_PCIE_ALLREDUCE_BACKEND=b12x
-VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE=64KB
-MAX_CUDAGRAPH_CAPTURE_SIZE=64
-B12X_MOE_FORCE_A16=1
-VLLM_B12X_FORCE_MOE_A16=1
-```
-
-The MTP rows use `GPU_MEMORY_UTILIZATION=0.855`, matching the v3 MTP profile.
-With the pure Luke default `0.825`, DCP1 + MTP did not have enough KV memory for
-`MAX_MODEL_LEN=202752`.
-
-| Profile | GPU memory utilization | KV budget used by benchmark | cc1 ctx0 | cc16 ctx0 |
-|---|---:|---:|---:|---:|
-| DCP1, MTP off | 0.825 | 217,855 | 55.5 tok/s | 411.9 tok/s |
-| DCP1, MTP on | 0.825 | n/a | startup failed | startup failed |
-| DCP1, MTP on | 0.855 | 245,056 | 95.2 tok/s | 613.0 tok/s |
-| DCP4, MTP off | 0.825 | 456,192 | 46.2 tok/s | 316.1 tok/s |
-| DCP4, MTP on | 0.855 | 570,112 | 69.7 tok/s | 426.3 tok/s |
-
-DCP1 + MTP at `GPU_MEMORY_UTILIZATION=0.825` failed before serving:
-
-```text
-To serve at least one request with max seq len 202752, 11.75 GiB KV cache is
-needed, larger than available 11.36 GiB.
-```
-
-Result directory on the measured host:
-
-```bash
-/root/bench-results/glm51-luke-b12x-a16-matrix-20260523
 ```
