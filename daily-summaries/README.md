@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-05-25](2026-05/2026-05-25.md) | b12x DS V4 Flash sglang push: luke released new b12x build with MTP support; early results show **~4 |
 | [2026-05-24](2026-05/2026-05-24.md) | DSV4 Flash: 82 tok/s C=1 MTP=OFF on sglang+b12x (TP=2), 79 tok/s at 128K context — C=2 near-linear |
 | [2026-05-23](2026-05/2026-05-23.md) | DSv4 Flash: 1400 t/s on GB10 at 128k context using w4a8 cutlass; sglang+b12x shows zero decode degra |
 | [2026-05-22](2026-05/2026-05-22.md) | RTX 6000 Pro price hike ~20% worldwide attributed to DDR7 memory costs; still selling [(jump)](https |
@@ -95,6 +96,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-05-25](2026-05/2026-05-25.md) | b12x DS V4 Flash sglang push: luke released new b12x build with MTP support; early results show **~4 |
 | [2026-05-24](2026-05/2026-05-24.md) | DSV4 Flash: 82 tok/s C=1 MTP=OFF on sglang+b12x (TP=2), 79 tok/s at 128K context — C=2 near-linear |
 | [2026-05-23](2026-05/2026-05-23.md) | DSv4 Flash: 1400 t/s on GB10 at 128k context using w4a8 cutlass; sglang+b12x shows zero decode degra |
 | [2026-05-22](2026-05/2026-05-22.md) | RTX 6000 Pro price hike ~20% worldwide attributed to DDR7 memory costs; still selling [(jump)](https |
