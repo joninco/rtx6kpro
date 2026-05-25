@@ -6,6 +6,7 @@ This section tracks GLM-5.1 experiments on RTX PRO 6000 Blackwell PCIe systems.
 
 | Date | Report | Scope |
 |---|---|---|
+| 2026-05-25 | [GLM-5.1 v4 mixed FP8 native W4A16 recipe](../glm5.1_v4.md) | Current GLM-5.1 mixed FP8PBWO L42-62 serving profile with native ModelOpt W4A16 decode, exact DockerHub tag, source branches/commits, DCP4+MTP launch recipe, KV-cache state, and KLD smoke result. |
 | 2026-05-16 | [GLM-5.1 NVFP4 KLD sensitivity resume](glm51-nvfp4-kld-sensitivity-2026-05-16.md) | Complete KLD checkpoint for GLM-5.1 NVFP4/W4A16, BF16 oracle sweeps, local quant-toolkit export fixes, mixed FP8_PB_WO expert-layer checkpoint construction, public HF upload workflow, and current quality/memory tradeoff candidates. |
 | 2026-05-15 | [B12X W4A16 regression checkpoint](b12x-w4a16-regression-checkpoint-2026-05-15.md) | Archive record for the experimental Luke B12X W4A16 merge, vLLM-side fixes, tested Docker image, observed GLM regression, recovery branches, and local bundle/patch backup. |
 | 2026-05-15 | [GLM-5.1 v2 canonical vLLM recipe](../glm5.1_v2.md) | Canonical GLM-5.1 recipe for the rebased GLM/Kimi vLLM stack, including DCP1/2/4/8 MTP on/off decode matrices and raw artifacts under [benchmarks/glm51-v2-full-68b3569f-20260514](benchmarks/glm51-v2-full-68b3569f-20260514/). |
