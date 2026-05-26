@@ -7,10 +7,11 @@ local GLM/B12X stack. The image uses the MTP checkpoint as both the target model
 and the speculative draft model. Do not substitute the non-MTP checkpoint for
 validation runs.
 
-Current status: DCP1 and DCP2 start and benchmark correctly with MTP and W4A16
-decode. DCP4 currently fails during startup runtime prewarm with
-`cudaErrorIllegalAddress`, so DCP4/DCP8 throughput should not be treated as
-validated on this image yet.
+Current status: DCP1, DCP2, and DCP4 start and benchmark correctly with MTP
+and W4A16 decode. DCP4 must leave `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` unset so
+B12X uses its DCP scratch budget; forcing it to `32` recreates the startup
+illegal-address failure described below. DCP8 is not validated on this image
+yet.
 
 ## Docker Compose
 
@@ -44,7 +45,6 @@ services:
       VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE: 64KB
       VLLM_DISABLED_KERNELS: MarlinFP8ScaledMMLinearKernel
       VLLM_USE_B12X_SPARSE_INDEXER: "1"
-      VLLM_B12X_MLA_EXTEND_MAX_CHUNKS: "32"
       VLLM_B12X_MLA_SPEC_SERIAL_DECODE: "0"
       VLLM_MTP_RETURN_NORMALIZED_HIDDEN: "1"
       VLLM_SPEC_ACCEPT_THRESHOLD_ACC: "1.0"
@@ -102,11 +102,15 @@ DCP_SIZE=2 GPU_MEMORY_UTILIZATION=0.855 docker compose -f compose.glm51-v5.yml u
 curl -fsS http://127.0.0.1:5317/health
 ```
 
-DCP4 currently fails on this image. The reproduced failing command was:
+Start DCP4:
 
 ```bash
 DCP_SIZE=4 GPU_MEMORY_UTILIZATION=0.845 docker compose -f compose.glm51-v5.yml up -d
+curl -fsS http://127.0.0.1:5317/health
 ```
+
+Do not add `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS=32` for DCP4. Leaving it unset lets
+the B12X MLA backend pick the DCP-safe value from the scratch budget.
 
 Do not set `NCCL_GRAPH_FILE=` as an empty environment variable. For this image,
 leave it unset. The compose command explicitly unsets both `NCCL_GRAPH_FILE` and
@@ -257,8 +261,8 @@ Quick ctx0 results:
 |---:|---|---|---:|---:|---:|---|
 | 1 | on | on | `0.865` | `85.8` | `558.1` | OK |
 | 2 | on | on | `0.855` | `68.7` | `458.1` | OK |
-| 4 | on | on | `0.845` | n/a | n/a | startup failed |
-| 8 | on | on | n/a | n/a | n/a | not run; DCP4 path already fails |
+| 4 | on | on | `0.845` | `65.0` | `389.5` | OK, no extend-chunk override |
+| 8 | on | on | n/a | n/a | n/a | not run |
 
 Artefacts:
 
@@ -266,11 +270,36 @@ Artefacts:
 |---:|---|
 | 1 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp1-mtp1-a16/quick-cc1-cc16-ctx0.json` |
 | 2 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp2-mtp1-a16/quick-cc1-cc16-ctx0.json` |
-| 4 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp4-mtp1-a16/startup-gpuutil0845-illegal-access.log` |
+| 4 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp4-mtp1-a16-noextendoverride/quick-cc1-cc16-ctx0.json` |
 
-## DCP4 Failure
+## DCP4 Extend-Chunk Trap
 
-DCP4 with `GPU_MEMORY_UTILIZATION=0.845` starts loading the model and reaches:
+The original DCP4 failure was caused by adding this override:
+
+```yaml
+VLLM_B12X_MLA_EXTEND_MAX_CHUNKS: "32"
+```
+
+With DCP4, the B12X MLA split path allocates tmp output after Q-head all-gather.
+For `max_num_batched_tokens=8192`, 32 gathered Q heads, `v_head_dim=512`, and
+BF16 tmp output, one chunk is 256 MiB. Forcing 32 chunks creates an 8 GiB split
+tmp-output layout per worker. A B12X-only reproducer failed in
+`run_sparse_mla_split_decode_forward` with the fixed scratch shape
+`[8192, 32, 32, 512]`.
+
+Leaving `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` unset uses the built-in DCP budget:
+2 GiB / 256 MiB = 8 chunks. That starts cleanly with a 2.21 GiB B12X joint
+arena and keeps the API healthy.
+
+Successful DCP4 startup at `GPU_MEMORY_UTILIZATION=0.845` without the override:
+
+```text
+B12X joint arena allocation: shared=2.21 GiB
+GPU KV cache size: 878,335 tokens
+Maximum concurrency for 202,752 tokens per request: 4.33x
+```
+
+The failing run with `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS=32` reached:
 
 ```text
 Model loading took 70.14 GiB memory
@@ -290,7 +319,7 @@ RuntimeError: Worker failed with error 'CUDA error: an illegal memory access was
 ```
 
 DCP2 at `GPU_MEMORY_UTILIZATION=0.865` failed earlier with a normal OOM during
-CUDA graph capture. Lowering DCP2 to `0.855` fixed that. The DCP4 failure is not
-the same class: it still fails at `0.845` with a CUDA illegal address after KV
-allocation and runtime prewarm begins.
-
+CUDA graph capture. Lowering DCP2 to `0.855` fixed that. The DCP4
+extend-chunk failure was different: it was a B12X split-MLA scratch layout
+problem triggered by the forced 32-chunk override, not a KV-cache headroom
+problem.
