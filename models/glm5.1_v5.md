@@ -263,6 +263,20 @@ Full-sweep artefacts:
 | 4 | `0.845` | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp4-mtp1-a16-noextendoverride/full-sweep-20260526-1506.json` |
 | 8 | `0.835` | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp8-mtp1-a16-full-gpu0835/full-sweep-20260526-1851.json` |
 
+Quick A4 vs A16 decode comparison:
+
+These are quick `ctx=0` checks for `cc=1` and `cc=16`, not full sweeps. All
+runs used MTP enabled and the same v5 image/config family. `A4` means
+`VLLM_B12X_FORCE_MOE_A16=0` and `B12X_MOE_FORCE_A16=0`; `A16` means
+`VLLM_B12X_FORCE_MOE_A16=1`.
+
+| DCP | MoE decode mode | GPU mem util | cc1 tok/s | cc16 tok/s | File |
+|---:|---|---:|---:|---:|---|
+| 1 | A4 | `0.855` | 87.8 | 561.3 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp1-mtp1-a16off-quick-gpu0855/quick-cc1-cc16-ctx0-20260526-1932.json` |
+| 1 | A16 | `0.855` | 85.8 | 558.1 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp1-mtp1-a16/quick-cc1-cc16-ctx0.json` |
+| 4 | A4 | `0.845` | 69.6 | 383.8 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp4-mtp1-a16off-quick-gpu0845/quick-cc1-cc16-ctx0-20260526-1938.json` |
+| 4 | A16 | `0.845` | 65.0 | 389.5 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp4-mtp1-a16-noextendoverride/quick-cc1-cc16-ctx0.json` |
+
 Prefill scout speed:
 
 | DCP | 8k tok/s | 16k tok/s | 32k tok/s | 64k tok/s | 128k tok/s |
