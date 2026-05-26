@@ -57,7 +57,7 @@ set -euo pipefail
 IMAGE="${IMAGE:-voipmonitor/vllm:glm-kimi-canonical-rebase-layered-vllm68b3569f-b12xc929144-flashinfergit1a60071-cutedsl45-20260514}"
 NAME="${NAME:-glm51-v2}"
 PORT="${PORT:-5264}"
-DCP="${DCP:-4}"
+DCP="${DCP:-1}"
 MTP="${MTP:-1}"
 GPU_MEM="${GPU_MEM:-0.865}"
 CACHE_ROOT="${CACHE_ROOT:-${HOME}/.cache/vllm-glm51-v2}"
@@ -105,7 +105,6 @@ exec docker run -d --gpus all --ipc=host --network host --privileged \
   -e VLLM_MTP_RETURN_NORMALIZED_HIDDEN=1 \
   -e VLLM_SPEC_ACCEPT_THRESHOLD_ACC=1.0 \
   -e VLLM_SPEC_ACCEPT_THRESHOLD_SINGLE=1.0 \
-  -e B12X_MOE_FORCE_A16=1 \
   -e PORT="${PORT}" \
   -e TP_SIZE=8 \
   -e DCP_SIZE="${DCP}" \
