@@ -8,10 +8,10 @@ and the speculative draft model. Do not substitute the non-MTP checkpoint for
 validation runs.
 
 Current status: DCP1, DCP2, and DCP4 start and benchmark correctly with MTP
-and W4A16 decode. DCP4 must leave `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` unset so
-B12X uses its DCP scratch budget; forcing it to `32` recreates the startup
-illegal-address failure described below. DCP8 is not validated on this image
-yet.
+and W4A16 decode. Do not override `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` for DCP
+profiles; leave it unset so B12X auto-calculates the DCP scratch budget.
+Forcing it to `32` recreates the startup illegal-address failure described
+below. DCP8 is not validated on this image yet.
 
 ## Docker Compose
 
@@ -109,8 +109,9 @@ DCP_SIZE=4 GPU_MEMORY_UTILIZATION=0.845 docker compose -f compose.glm51-v5.yml u
 curl -fsS http://127.0.0.1:5317/health
 ```
 
-Do not add `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS=32` for DCP4. Leaving it unset lets
-the B12X MLA backend pick the DCP-safe value from the scratch budget.
+Do not set or override `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` for DCP profiles.
+Leaving it unset lets the B12X MLA backend auto-calculate the DCP-safe value
+from the scratch budget.
 
 Do not set `NCCL_GRAPH_FILE=` as an empty environment variable. For this image,
 leave it unset. The compose command explicitly unsets both `NCCL_GRAPH_FILE` and
