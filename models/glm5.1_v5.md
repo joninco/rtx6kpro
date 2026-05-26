@@ -122,9 +122,10 @@ leave it unset. The compose command explicitly unsets both `NCCL_GRAPH_FILE` and
 The measured image was built from:
 
 ```bash
-git clone https://github.com/voipmonitor/vllm.git vllm-glm51-v5
+git clone --branch codex/vllm-upstream-main-stack-20260526 https://github.com/voipmonitor/vllm.git vllm-glm51-v5
 cd vllm-glm51-v5
-git checkout 4cdbe047c596342f2e924101798cd907469d0090
+git rev-parse HEAD
+# expected: 4cdbe047c596342f2e924101798cd907469d0090
 
 docker build \
   -f docker/Dockerfile.glm51-kimi-b12x013 \
@@ -144,8 +145,8 @@ docker build \
 | Docker tag | `voipmonitor/vllm:glm51-v5-upstreammain-vllm4cdbe04-b12xf6abdd2-flashinfer56d537a-20260526` |
 | Image ID | `sha256:8e0db3ca66cf27191c413a176f675e6072b04e99a3cf6e58c91a096f35106cb5` |
 | vLLM repo | `https://github.com/voipmonitor/vllm.git` |
-| vLLM branch | `codex/vllm-upstream-main-stack-20260526` |
-| vLLM commit | `4cdbe047c596342f2e924101798cd907469d0090` |
+| vLLM branch | [`codex/vllm-upstream-main-stack-20260526`](https://github.com/voipmonitor/vllm/tree/codex/vllm-upstream-main-stack-20260526) |
+| vLLM commit | [`4cdbe047c596342f2e924101798cd907469d0090`](https://github.com/voipmonitor/vllm/commit/4cdbe047c596342f2e924101798cd907469d0090) |
 | B12X repo | `https://github.com/voipmonitor/b12x.git` |
 | B12X branch | `codex/explicit-w13-order-cleanup-20260525` |
 | B12X commit | `f6abdd287994141712f8401645afcc3e4b25dbc8` |
