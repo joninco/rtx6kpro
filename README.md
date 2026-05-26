@@ -16,6 +16,7 @@ Community-sourced knowledge base for running large language models (Qwen3.5-397B
 | [MiMo-V2.5-Pro](models/mimo-v25-pro/README.md) | MoE | — | 8× | TP8 NVFP4/MXFP8 + MTP/EAGLE | [→](models/mimo-v25-pro/README.md) |
 | [Kimi-K2.5](models/kimi-k25.md) | 530B MoE | — | 8× | 101 tok/s (PCIe switch) | [→](models/kimi-k25.md) |
 | [Kimi-K2.6](models/kimi-k26.md) | MoE | — | 8× | Community image + MLA Eagle | [→](models/kimi-k26.md) |
+| [Kimi-K2.6 v6](models/kimi-k26-v6.md) | MoE | — | 8× | LightSeek Eagle3.1 MLA + vLLM V2 | [→](models/kimi-k26-v6.md) |
 | [Kimi-K2.6 v5](models/kimi-k26-v5.md) | MoE | — | 8× | CUDA 13.2 vLLM V2 + p/q MTP | [→](models/kimi-k26-v5.md) |
 | [GLM-5](models/glm5.md) | 744B MoE | 40B | 8× | 105 tok/s (MTP) | [→](models/glm5.md) |
 | [GLM-5.1](models/glm5.1/README.md) | MoE | — | 8× | vLLM b12x NSA/MTP port | [→](models/glm5.1/README.md) |
