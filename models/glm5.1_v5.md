@@ -7,11 +7,11 @@ local GLM/B12X stack. The image uses the MTP checkpoint as both the target model
 and the speculative draft model. Do not substitute the non-MTP checkpoint for
 validation runs.
 
-Current status: DCP1, DCP2, and DCP4 start and benchmark correctly with MTP
-and W4A16 decode. Do not override `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` for DCP
-profiles; leave it unset so B12X auto-calculates the DCP scratch budget.
+Current status: DCP1, DCP2, DCP4, and DCP8 start and benchmark correctly with
+MTP and W4A16 decode. Do not override `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` for
+DCP profiles; leave it unset so B12X auto-calculates the DCP scratch budget.
 Forcing it to `32` recreates the startup illegal-address failure described
-below. DCP8 is not validated on this image yet.
+below.
 
 ## Docker Compose
 
@@ -57,7 +57,7 @@ services:
       SPEC_CONFIG: '{"model":"/root/.cache/huggingface/hub/models--lukealonso--GLM-5.1-NVFP4-MTP/snapshots/78b7fe365f3905b4e0261a85182fefdbd5137989","method":"mtp","num_speculative_tokens":3,"moe_backend":"b12x","draft_sample_method":"probabilistic","use_local_argmax_reduction":false}'
       TP_SIZE: "8"
       DCP_SIZE: "${DCP_SIZE:-1}"
-      GPU_MEMORY_UTILIZATION: "${GPU_MEMORY_UTILIZATION:-0.865}"
+      GPU_MEMORY_UTILIZATION: "${GPU_MEMORY_UTILIZATION:-0.855}"
       MAX_MODEL_LEN: "202752"
       MAX_NUM_BATCHED_TOKENS: "8192"
       MAX_NUM_SEQS: "64"
@@ -91,7 +91,7 @@ services:
 Start DCP1:
 
 ```bash
-docker compose -f compose.glm51-v5.yml up -d
+GPU_MEMORY_UTILIZATION=0.855 docker compose -f compose.glm51-v5.yml up -d
 curl -fsS http://127.0.0.1:5317/health
 ```
 
@@ -106,6 +106,13 @@ Start DCP4:
 
 ```bash
 DCP_SIZE=4 GPU_MEMORY_UTILIZATION=0.845 docker compose -f compose.glm51-v5.yml up -d
+curl -fsS http://127.0.0.1:5317/health
+```
+
+Start DCP8:
+
+```bash
+DCP_SIZE=8 GPU_MEMORY_UTILIZATION=0.835 docker compose -f compose.glm51-v5.yml up -d
 curl -fsS http://127.0.0.1:5317/health
 ```
 
@@ -228,27 +235,9 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
   --concurrency 1,2,4,8,16,32,64,128 \
   --contexts 0,16k,32k,64k,128k \
   --duration 30 \
-  --skip-prefill \
   --dcp-size "${DCP_SIZE}" \
   --display-mode plain \
-  --no-hw-monitor \
-  --output "/root/bench-results/glm51-v5-upstreammain-20260526/dcp${DCP_SIZE}-mtp1-a16/full.json"
-```
-
-Quick validation command used for the current table:
-
-```bash
-python3 /root/llm-inference-bench/llm_decode_bench.py \
-  --port 5317 \
-  --model GLM-5 \
-  --concurrency 1,16 \
-  --contexts 0 \
-  --duration 20 \
-  --skip-prefill \
-  --dcp-size "${DCP_SIZE}" \
-  --display-mode plain \
-  --no-hw-monitor \
-  --output "/root/bench-results/glm51-v5-upstreammain-20260526/dcp${DCP_SIZE}-mtp1-a16/quick-cc1-cc16-ctx0.json"
+  --output "/root/bench-results/glm51-v5-upstreammain-20260526/dcp${DCP_SIZE}-mtp1-a16-full/full.json"
 ```
 
 `llm_decode_bench.py` version:
@@ -257,49 +246,55 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
 0.4.23
 ```
 
-Quick ctx0 results:
+All full-sweep runs below used MTP enabled, `VLLM_B12X_FORCE_MOE_A16=1`,
+`VLLM_PCIE_ALLREDUCE_BACKEND=b12x`, `VLLM_USE_B12X_SPARSE_INDEXER=1`,
+`CUTE_DSL_ARCH=sm_120a`, and `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` unset.
 
-| DCP | MTP | A16 decode | GPU mem util | cc1 tok/s | cc16 tok/s | Result |
-|---:|---|---|---:|---:|---:|---|
-| 1 | on | on | `0.865` | `85.8` | `558.1` | OK |
-| 2 | on | on | `0.855` | `68.7` | `458.1` | OK |
-| 4 | on | on | `0.845` | `65.0` | `389.5` | OK, no extend-chunk override |
-| 8 | on | on | n/a | n/a | n/a | not run |
+DCP1 quick validation was able to run at `GPU_MEMORY_UTILIZATION=0.865`, but a
+full CUDA graph capture run at that setting failed with a normal OOM while
+allocating 448 MiB. The full sweep therefore uses `0.855`.
 
-Artefacts:
+Full-sweep artefacts:
 
-| DCP | File |
-|---:|---|
-| 1 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp1-mtp1-a16/quick-cc1-cc16-ctx0.json` |
-| 2 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp2-mtp1-a16/quick-cc1-cc16-ctx0.json` |
-| 4 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp4-mtp1-a16-noextendoverride/quick-cc1-cc16-ctx0.json` |
-
-### DCP4 Full Sweep, MTP On, W4A16 Decode
-
-Current run on the same v5 image with `DCP_SIZE=4`,
-`GPU_MEMORY_UTILIZATION=0.845`, MTP enabled, `VLLM_B12X_FORCE_MOE_A16=1`,
-`VLLM_PCIE_ALLREDUCE_BACKEND=b12x`, and
-`VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` unset.
-
-Artefact:
-
-```text
-/root/bench-results/glm51-v5-upstreammain-20260526/dcp4-mtp1-a16-noextendoverride/full-sweep-20260526-1506.json
-```
+| DCP | GPU mem util | File |
+|---:|---:|---|
+| 1 | `0.855` | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp1-mtp1-a16-full-gpu0855/full-sweep-20260526-1818.json` |
+| 2 | `0.855` | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp2-mtp1-a16-full-gpu0855/full-sweep-20260526-1836.json` |
+| 4 | `0.845` | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp4-mtp1-a16-noextendoverride/full-sweep-20260526-1506.json` |
+| 8 | `0.835` | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp8-mtp1-a16-full-gpu0835/full-sweep-20260526-1851.json` |
 
 Prefill scout speed:
 
-| Context | Prompt tokens | TTFT s | Client tok/s |
-|---:|---:|---:|---:|
-| 8k | 8,195 | 3.05 | 2,687 |
-| 16k | 16,230 | 6.50 | 2,496 |
-| 32k | 32,339 | 13.57 | 2,383 |
-| 64k | 64,550 | 27.99 | 2,306 |
-| 128k | 128,965 | 57.74 | 2,234 |
+| DCP | 8k tok/s | 16k tok/s | 32k tok/s | 64k tok/s | 128k tok/s |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 3,624 | 4,304 | 4,116 | ∅ | ∅ |
+| 2 | 2,892 | 3,371 | 3,278 | 3,155 | ∅ |
+| 4 | 2,687 | 2,496 | 2,383 | 2,306 | 2,234 |
+| 8 | 1,750 | 1,717 | 1,529 | 1,444 | 1,398 |
 
-Aggregate sustained decode tok/s:
+Aggregate sustained decode tok/s, DCP1:
 
-| ctx \ concurrency | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
+| ctx / concurrency | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 84.8 | 141.5 | 233.2 | 360.0 | 552.3 | ∅ | ∅ | ∅ |
+| 16k | 81.2 | 136.5 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 32k | 82.3 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 64k | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 128k | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+
+Aggregate sustained decode tok/s, DCP2:
+
+| ctx / concurrency | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 68.1 | 117.3 | 189.9 | 288.8 | 451.7 | 596.1 | ∅ | ∅ |
+| 16k | 64.5 | 112.0 | 175.6 | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 32k | 65.3 | 112.8 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 64k | 65.1 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 128k | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+
+Aggregate sustained decode tok/s, DCP4:
+
+| ctx / concurrency | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | 0 | 68.1 | 106.6 | 174.2 | 251.9 | 385.1 | 497.8 | 636.7 | ∅ |
 | 16k | 64.6 | 101.9 | 161.9 | 240.9 | ∅ | ∅ | ∅ | ∅ |
@@ -307,18 +302,20 @@ Aggregate sustained decode tok/s:
 | 64k | 61.3 | 103.7 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
 | 128k | 61.3 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
 
-Per-request sustained decode tok/s:
+Aggregate sustained decode tok/s, DCP8:
 
-| ctx \ concurrency | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
+| ctx / concurrency | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 0 | 68.1 | 53.3 | 43.5 | 31.5 | 24.1 | 15.6 | 9.9 | ∅ |
-| 16k | 64.6 | 51.0 | 40.5 | 30.1 | ∅ | ∅ | ∅ | ∅ |
-| 32k | 62.1 | 50.1 | 39.4 | ∅ | ∅ | ∅ | ∅ | ∅ |
-| 64k | 61.3 | 51.8 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
-| 128k | 61.3 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 0 | 61.7 | 96.5 | 150.1 | 213.6 | 293.4 | 345.9 | 456.5 | 437.2* |
+| 16k | 57.5 | 90.2 | 141.4 | 197.3 | 258.8 | ∅ | ∅ | ∅ |
+| 32k | 59.3 | 92.2 | 135.8 | 195.8 | ∅ | ∅ | ∅ | ∅ |
+| 64k | 60.0 | 89.8 | 135.0 | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 128k | 58.1 | 88.7 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
 
 `∅` means the cell was skipped or hidden because it does not fit in the KV
-cache for this run; exact capacity details are in the JSON artefact.
+cache for this run. `*` means the JSON marks the cell as capacity-limited or
+warmup-limited, so it is not a fully admitted steady-state comparison point.
+Exact capacity details are in the JSON artefacts.
 
 ## DCP4 Extend-Chunk Trap
 
