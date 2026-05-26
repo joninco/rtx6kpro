@@ -192,9 +192,9 @@ curl -fsS http://127.0.0.1:8402/v1/chat/completions \
 
 ## Benchmark Command
 
-Use `llm_decode_bench.py` v0.4.23 or newer. The v6 numbers below are the
-DCP8 + MTP-on profile, measured with scout prefill enabled and sustained decode
-enabled. Burst/E2E decode was not run.
+Use `llm_decode_bench.py` v0.4.23 or newer. The DCP8 and DCP1 numbers below
+were measured with scout prefill enabled and sustained decode enabled.
+Burst/E2E decode was not run.
 
 Measured JSON source on the local host:
 
@@ -213,7 +213,7 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
   --output /root/bench-results/kimi-k26-v6-lightseek-eagle31-dcp8-mtp1-20260526/result.json
 ```
 
-## Primary Results
+## DCP8 Primary Results
 
 Configuration:
 
@@ -229,7 +229,7 @@ Configuration:
 | Attention | target `TRITON_MLA`, draft `TRITON_MLA`, prefill selected `FLASH_ATTN MLA` |
 | Allreduce | PCIe custom allreduce disabled, PYNCCL fallback |
 | Aggregate decode source | `openai_continuous_usage` |
-| Raw result | `/root/benchmark_results.json` |
+| Raw result | captured from the previous DCP8 `/root/benchmark_results.json`; the current file was later overwritten by the DCP1 sweep |
 
 ### Prefill Speed
 
@@ -294,7 +294,7 @@ Cells are `TTFT ms / ITL ms`. ITL is computed from observed generated tokens.
 | 64k | 680 / 12 | 7k / 51 | 13k / 83 | N/A | N/A |
 | 128k | 1k / 14 | 14k / 71 | N/A | N/A | N/A |
 
-## Consolidated Findings
+## DCP8 Consolidated Findings
 
 - Best single-request decode: `95.3 tok/s` at `ctx0`, `94.9 tok/s` at `16k`, `91.8 tok/s` at `32k`, `80.9 tok/s` at `64k`, and `70.3 tok/s` at `128k`.
 - Best aggregate decode in this sweep: `1159.5 tok/s` at `ctx0/concurrency128`.
@@ -306,10 +306,100 @@ Cells are `TTFT ms / ITL ms`. ITL is computed from observed generated tokens.
 - PCIe traffic is workload dependent. The largest sampled short-context cell was about `223 GB/s rx / 223 GB/s tx` at `ctx0/concurrency128`; long-context `128k/concurrency16` was about `42 GB/s rx / 41 GB/s tx`.
 - Peak sampled board power in this run was about `2.76 kW` total across the 8 GPUs; max reported GPU temperature was `64C`.
 
+## DCP1 Primary Results
+
+The DCP1 run keeps the same image, target checkpoint, LightSeek Eagle3.1 MLA
+draft, MTP settings, attention backend, fp8 KV cache, and `GPU_MEM=0.90`. Only
+`DCP=1` was changed from the DCP8 profile.
+
+Configuration:
+
+| Field | Value |
+|---|---|
+| Benchmark | `llm_decode_bench.py v0.4.23` |
+| Result timestamp | `2026-05-26T16:39:37.170417` |
+| Runtime | vLLM V2 model runner |
+| DCP | 1 |
+| MTP | Eagle3.1, `num_speculative_tokens=3` |
+| GPU memory utilization | `0.90` |
+| KV cache | fp8, `340,672` tokens |
+| Maximum concurrency for 262,144 tokens | `1.30x` |
+| Attention | target `TRITON_MLA`, draft `TRITON_MLA`, prefill selected `FLASH_ATTN MLA` |
+| Allreduce | PCIe custom allreduce disabled, PYNCCL fallback |
+| Aggregate decode source | `openai_continuous_usage` |
+| Raw result | `/root/benchmark_results.json` |
+
+### DCP1 Prefill Speed
+
+| Context | Prompt tokens | TTFT s | Client tok/s | N |
+|---:|---:|---:|---:|---:|
+| 8k | 8,186 | 1.09 | 7,528 | 1 |
+| 16k | 16,228 | 2.26 | 7,192 | 1 |
+| 32k | 32,306 | 4.82 | 6,701 | 1 |
+| 64k | 64,467 | 10.92 | 5,906 | 1 |
+| 128k | 128,784 | 26.58 | 4,845 | 1 |
+
+### DCP1 Sustained Decode Aggregate tok/s
+
+`N/A` means the cell was not measured in this DCP1 sweep because it did not fit
+the available KV cache.
+
+| ctx \ conc | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 128.4 | 216.9 | 354.1 | 493.4 | 743.1 | 1104.4 | 1652.9 | 2377.8 |
+| 16k | 111.3 | 186.8 | 259.8 | 366.3 | 491.4 | N/A | N/A | N/A |
+| 32k | 94.4 | 162.0 | 220.9 | 270.4 | N/A | N/A | N/A | N/A |
+| 64k | 82.1 | 119.8 | 158.0 | N/A | N/A | N/A | N/A | N/A |
+| 128k | 60.6 | 86.3 | N/A | N/A | N/A | N/A | N/A | N/A |
+
+### DCP1 Speculative Acceptance Rate
+
+Values are `server_spec_accept_rate` from the benchmark JSON.
+
+| ctx \ conc | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 41.7% | 42.2% | 43.3% | 56.7% | 34.0% | 34.4% | 38.4% | 38.5% |
+| 16k | 32.1% | 33.0% | 52.2% | 51.7% | 45.1% | N/A | N/A | N/A |
+| 32k | 42.0% | 44.4% | 35.6% | 33.9% | N/A | N/A | N/A | N/A |
+| 64k | 42.3% | 32.6% | 31.0% | N/A | N/A | N/A | N/A | N/A |
+| 128k | 21.2% | 32.5% | N/A | N/A | N/A | N/A | N/A | N/A |
+
+### DCP1 Per-Request tok/s
+
+| ctx \ conc | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 128.4 | 108.4 | 88.5 | 61.7 | 46.4 | 34.5 | 25.8 | 18.6 |
+| 16k | 111.3 | 93.4 | 65.0 | 45.8 | 30.7 | N/A | N/A | N/A |
+| 32k | 94.4 | 81.0 | 55.2 | 33.8 | N/A | N/A | N/A | N/A |
+| 64k | 82.1 | 59.9 | 39.5 | N/A | N/A | N/A | N/A | N/A |
+| 128k | 60.6 | 43.1 | N/A | N/A | N/A | N/A | N/A | N/A |
+
+### DCP1 Selected TTFT / ITL
+
+Cells are `TTFT ms / ITL ms`.
+
+| ctx \ conc | 1 | 16 | 32 | 64 | 128 |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 50 / 8 | 164 / 21 | 213 / 27 | 350 / 36 | 504 / 50 |
+| 16k | 163 / 9 | 1.4k / 32 | N/A | N/A | N/A |
+| 32k | 286 / 10 | N/A | N/A | N/A | N/A |
+| 64k | 533 / 12 | N/A | N/A | N/A | N/A |
+| 128k | 1k / 16 | N/A | N/A | N/A | N/A |
+
+## DCP1 Consolidated Findings
+
+- DCP1 is faster per measured decode cell than DCP8, but has much less KV capacity: `340,672` tokens versus DCP8 `2,725,376` tokens.
+- Best single-request decode in DCP1: `128.4 tok/s` at `ctx0`, `111.3 tok/s` at `16k`, `94.4 tok/s` at `32k`, `82.1 tok/s` at `64k`, and `60.6 tok/s` at `128k`.
+- Best aggregate decode in this DCP1 sweep: `2377.8 tok/s` at `ctx0/concurrency128`.
+- Highest long-context measured aggregate: `86.3 tok/s` at `128k/concurrency2`; higher 128k concurrencies were not measured because the DCP1 KV budget does not fit them.
+- Prefill scout throughput declines from `7,528 tok/s` at 8k to `4,845 tok/s` at 128k.
+- Speculative acceptance ranged from `21.2%` to `56.7%`; the simple mean across measured cells was `39.0%`, and the output-token-weighted mean was about `39.5%`.
+- The run is GPU-bound in measured cells: max sampled GPU utilization reached `99%`, max VRAM occupancy was `95.2%`, peak sampled board power was about `2.77 kW`, and max reported GPU temperature was `64C`.
+
 ## Notes
 
-- The benchmark result is for DCP8 + MTP on. DCP1/2/4 comparisons still need to
-  be measured separately.
+- This page currently records DCP8 + MTP on and DCP1 + MTP on. DCP2/4
+  comparisons still need to be measured separately.
 - The current target checkpoint is `moonshotai/Kimi-K2.6`. If switching to the
   LightSeek card's suggested `nvidia/Kimi-K2.6-NVFP4` target, treat that as a new
   profile and remeasure.
