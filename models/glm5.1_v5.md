@@ -273,6 +273,52 @@ Artefacts:
 | 2 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp2-mtp1-a16/quick-cc1-cc16-ctx0.json` |
 | 4 | `/root/bench-results/glm51-v5-upstreammain-20260526/dcp4-mtp1-a16-noextendoverride/quick-cc1-cc16-ctx0.json` |
 
+### DCP4 Full Sweep, MTP On, W4A16 Decode
+
+Current run on the same v5 image with `DCP_SIZE=4`,
+`GPU_MEMORY_UTILIZATION=0.845`, MTP enabled, `VLLM_B12X_FORCE_MOE_A16=1`,
+`VLLM_PCIE_ALLREDUCE_BACKEND=b12x`, and
+`VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` unset.
+
+Artefact:
+
+```text
+/root/bench-results/glm51-v5-upstreammain-20260526/dcp4-mtp1-a16-noextendoverride/full-sweep-20260526-1506.json
+```
+
+Prefill scout speed:
+
+| Context | Prompt tokens | TTFT s | Client tok/s |
+|---:|---:|---:|---:|
+| 8k | 8,195 | 3.05 | 2,687 |
+| 16k | 16,230 | 6.50 | 2,496 |
+| 32k | 32,339 | 13.57 | 2,383 |
+| 64k | 64,550 | 27.99 | 2,306 |
+| 128k | 128,965 | 57.74 | 2,234 |
+
+Aggregate sustained decode tok/s:
+
+| ctx \ concurrency | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 68.1 | 106.6 | 174.2 | 251.9 | 385.1 | 497.8 | 636.7 | ∅ |
+| 16k | 64.6 | 101.9 | 161.9 | 240.9 | ∅ | ∅ | ∅ | ∅ |
+| 32k | 62.1 | 100.2 | 157.5 | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 64k | 61.3 | 103.7 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 128k | 61.3 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+
+Per-request sustained decode tok/s:
+
+| ctx \ concurrency | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 68.1 | 53.3 | 43.5 | 31.5 | 24.1 | 15.6 | 9.9 | ∅ |
+| 16k | 64.6 | 51.0 | 40.5 | 30.1 | ∅ | ∅ | ∅ | ∅ |
+| 32k | 62.1 | 50.1 | 39.4 | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 64k | 61.3 | 51.8 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+| 128k | 61.3 | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ | ∅ |
+
+`∅` means the cell was skipped or hidden because it does not fit in the KV
+cache for this run; exact capacity details are in the JSON artefact.
+
 ## DCP4 Extend-Chunk Trap
 
 The original DCP4 failure was caused by adding this override:
