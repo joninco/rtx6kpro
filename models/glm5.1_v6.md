@@ -93,7 +93,7 @@ docker build \
   --build-arg FLASHINFER_REPO=https://github.com/flashinfer-ai/flashinfer.git \
   --build-arg FLASHINFER_COMMIT=b7181ce827541a31d773dc4a71b6e5e7a309ca02 \
   --build-arg VLLM_BUILD_VERSION=0.11.2.dev278+glm51v6awqmxfp820260528 \
-  -t voipmonitor/vllm:glm51-v6-awqmxfp8-vllmb9c1ca2-b12xdebdd90-flashinferb7181ce-20260528 \
+  -t voipmonitor/vllm:glm51-v6-awqmxfp8-vllmd8de8e1-b12xdebdd90-flashinferb7181ce-20260528 \
   .
 ```
 
@@ -104,7 +104,8 @@ The v6 Dockerfile also performs a targeted cublas package refresh before
 building FlashInfer:
 
 ```bash
-apt-get install -y --no-install-recommends --only-upgrade \
+apt-get install -y --allow-change-held-packages \
+  --no-install-recommends --only-upgrade \
   libcublas-13-0 \
   libcublas-dev-13-0
 ```
