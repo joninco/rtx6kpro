@@ -93,7 +93,7 @@ docker build \
   --build-arg FLASHINFER_REPO=https://github.com/flashinfer-ai/flashinfer.git \
   --build-arg FLASHINFER_COMMIT=b7181ce827541a31d773dc4a71b6e5e7a309ca02 \
   --build-arg VLLM_BUILD_VERSION=0.11.2.dev278+glm51v6awqmxfp820260528 \
-  -t voipmonitor/vllm:glm51-v6-awqmxfp8-vllmd8de8e1-b12xdebdd90-flashinferb7181ce-20260528 \
+  -t voipmonitor/vllm:glm51-v6-awqmxfp8-vllm8075fc85-b12xdebdd90-flashinferb7181ce-20260528 \
   .
 ```
 
@@ -107,8 +107,13 @@ building FlashInfer:
 apt-get install -y --allow-change-held-packages \
   --no-install-recommends --only-upgrade \
   libcublas-13-0 \
-  libcublas-dev-13-0
+libcublas-dev-13-0
 ```
+
+The v6 image refreshes `flashinfer-python` and `flashinfer-cubin` from
+`b7181ce`. It intentionally keeps the base image `flashinfer-jit-cache` package
+because the current git `flashinfer-jit-cache` wheel build fails during AOT
+packaging in this Dockerfile path.
 
 ## MTP AWQ Loader Fix
 
