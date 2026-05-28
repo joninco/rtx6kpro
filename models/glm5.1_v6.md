@@ -4,7 +4,8 @@ Measured starting on 2026-05-28 on the local 8-GPU RTX PRO 6000 Blackwell
 host.
 
 This page tracks the GLM-5.1 v6 quantization sweep. The first recorded speed
-row is pure AWQ with DCP4 and MTP enabled. More quant variants will be added as
+row is pure AWQ with DCP4 and MTP enabled. The first LAVD quality row is from
+the AWQ+MXFP8 L42-62 DCP4 MTP instance. More quant variants will be added as
 they are measured.
 
 Current live benchmark JSON:
@@ -44,6 +45,69 @@ glm51-v5-awq-mxfp8-hybrid-mtpfix:test
 Runtime scripts should deliberately unset `NCCL_GRAPH_FILE` and
 `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS`. Do not set either to an empty or forced value
 for DCP runs.
+
+## v6 Source Branches
+
+The v6 rebuild is based on branches that match the live AWQ+MXFP8 image source
+state, plus a fresh FlashInfer checkout:
+
+```text
+vllm:       https://github.com/voipmonitor/vllm/tree/codex/glm51-v6-awq-mxfp8-20260528
+b12x:       https://github.com/voipmonitor/b12x/tree/codex/glm51-v6-awq-mxfp8-20260528
+flashinfer: https://github.com/flashinfer-ai/flashinfer/tree/b7181ce827541a31d773dc4a71b6e5e7a309ca02
+```
+
+The live image used for the first AWQ+MXFP8 checks was:
+
+```text
+image:      glm51-v5-awq-mxfp8-hybrid-mtpfix:test
+image id:   sha256:fa9ff7aee78f60cc2df44a010845b9b46c0fdfc224311c3707ef8a30ec2bc9e0
+container:  glm51-awq-mxfp8-dcp4-mtp-greedy
+```
+
+Source verification against that container:
+
+```text
+vllm/config/speculative.py                         MATCH
+vllm/model_executor/layers/quantization/modelopt.py MATCH
+vllm/model_executor/model_loader/weight_utils.py    MATCH
+vllm/model_executor/models/deepseek_v2.py           MATCH
+b12x/distributed/pcie_oneshot.cu                    MATCH
+b12x/moe/fused/w4a16/kernel.py                      MATCH
+b12x/integration/tp_moe.py                          MATCH
+b12x/moe/fused/w4a16/prepare.py                     MATCH
+```
+
+The v6 Docker rebuild should use those branches directly instead of ad-hoc
+overlay `COPY` layers:
+
+```bash
+git clone https://github.com/voipmonitor/vllm.git vllm-glm51-v6
+cd vllm-glm51-v6
+git checkout codex/glm51-v6-awq-mxfp8-20260528
+
+docker build \
+  -f docker/Dockerfile.glm51-kimi-b12x013 \
+  --build-arg B12X_REPO=https://github.com/voipmonitor/b12x.git \
+  --build-arg B12X_COMMIT=debdd90789d4ac59e5ba0adb1c4380f994fbe89c \
+  --build-arg FLASHINFER_REPO=https://github.com/flashinfer-ai/flashinfer.git \
+  --build-arg FLASHINFER_COMMIT=b7181ce827541a31d773dc4a71b6e5e7a309ca02 \
+  --build-arg VLLM_BUILD_VERSION=0.11.2.dev278+glm51v6awqmxfp820260528 \
+  -t voipmonitor/vllm:glm51-v6-awqmxfp8-vllmb9c1ca2-b12xdebdd90-flashinferb7181ce-20260528 \
+  .
+```
+
+If rebuilding from a local checkout instead of the published branch, verify the
+same source hashes before tagging the image.
+
+The v6 Dockerfile also performs a targeted cublas package refresh before
+building FlashInfer:
+
+```bash
+apt-get install -y --no-install-recommends --only-upgrade \
+  libcublas-13-0 \
+  libcublas-dev-13-0
+```
 
 ## MTP AWQ Loader Fix
 
@@ -214,6 +278,52 @@ not a clean steady-state comparison point. Exact request-level details remain
 in `/root/benchmark_results.json` under `request_samples`.
 
 Burst/E2E decode was not run for this entry.
+
+## AWQ+MXFP8 DCP4 MTP LAVD Quality
+
+This result belongs to the currently running AWQ+MXFP8 L42-62 DCP4 MTP greedy
+instance, not the pure AWQ speed row above.
+
+```text
+profile:        lavd-test
+prompt:         profile:lavd-test
+prompt chars:   48,302
+requested runs: 10
+concurrency:    10
+max tokens:     omitted (server/model default)
+scoring:        ledger_lavd
+expected:       72, 46
+prompt sha256:  5c83674d5f0fd2a7
+dataset sha256: 612f8041bbca048c
+```
+
+Concurrency result:
+
+```text
+parallel  done/started  score                       stars       output tok p50  output tok p90  aggregate tok/s  avg request s
+-------------------------------------------------------------------------------------------------------------------------------
+10        10/10         EXACT 7 / NEAR 3 / FAIL 0   7/10 stars          33,780          40,126             38.3          903.5
+```
+
+Selected C=10 summary:
+
+```text
+completed:                  10/10
+score:                      EXACT 7 / NEAR 3 / FAIL 0
+hit max_tokens:             0
+completion tokens avg:      34,174
+completion tokens p50:      33,780
+completion tokens p90:      40,126
+completion tokens p99:      43,590
+elapsed avg:                903.5s
+TTFT avg:                   10.38s
+aggregate gen tok/s:        38.3
+mean per-request gen tok/s: 38.1
+```
+
+Interpretation: EXACT means the parsed final numeric pair is exactly `72,
+46.0`. NEAR means both count and hours are inside the configured tolerance.
+FAIL means the answer was unparseable or outside tolerance.
 
 ## Pending Rows
 
