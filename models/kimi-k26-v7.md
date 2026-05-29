@@ -1,7 +1,8 @@
 # Kimi-K2.6 v7 on 8x RTX PRO 6000 Blackwell
 
-Status: measured 2026-05-29. This page is the Kimi-K2.6 v7 runbook and speed
-sweep for the CUDA 13.2 GLM/Kimi vLLM stack with B12X PR8 small-M overlay.
+Status: measured locally on 2026-05-29. This page is the Kimi-K2.6 v7 runbook
+and speed sweep for the CUDA 13.2 GLM/Kimi vLLM stack with B12X PR8 small-M
+overlay. Earlier helper-host results from `10.229.14.14` were discarded.
 
 The runtime recipe below intentionally mirrors the Kimi v5 standard+greedy
 runbook: vLLM V2 model runner, TRITON_MLA, fp8 target KV, fp8 Eagle3 draft KV,
@@ -27,7 +28,7 @@ Image metadata:
 | CUDA base | `nvidia/cuda:13.2.1-cudnn-devel-ubuntu24.04` |
 | CUDA | `13.2.1` |
 | CUDA compat | `595.71.05-1ubuntu1` |
-| cuBLAS | `13.4.1.2-1` |
+| cuBLAS installed packages | `libcublas-13-2 13.4.0.1-1`, `libcublas-dev-13-2 13.4.0.1-1` |
 | cuDNN overlay | `9.22.0.52-1` |
 | PyTorch | `2.12.0+cu132` |
 | NCCL | `local-inference-lab/nccl-canonical`, branch `canonical/cu132-nccl2304-amd-noxml`, version `2.30.4` |
@@ -84,7 +85,7 @@ docker image inspect "$IMAGE" --format '{{json .Config.Labels}}' | python3 -m js
 | vLLM commit | `89da7631ebb844d39dcd5abe5265bc20983be69f` | `2f5db31f9bcddf8d0cdd4d52f012759f50f37875` |
 | B12X branch | `codex/glm51-kimi-b12x-a16-cpuhangfix-cutedsl45-20260512` | `codex/glm51-v6-awq-mxfp8-pr8-smallm-20260528` |
 | B12X commit | `c929144c7689668b07ca65af10ceadf1c745165d` | `fbb76ca3a91491c8f26a2edf729540414323e55b` |
-| CUDA libraries | cuBLAS/cuDNN from v5 CUDA 13.2 base | cuBLAS `13.4.1.2-1`, cuDNN `9.22.0.52-1` overlay |
+| CUDA libraries | cuBLAS/cuDNN from v5 CUDA 13.2 base | installed cuBLAS packages `13.4.0.1-1`, cuDNN `9.22.0.52-1` overlay |
 | FlashInfer | `9035311e975a6aeb2d229f5162e999dfb7c9a733` | `8eb61546e82169759801c7895537f3c09ec423f9` |
 | B12X optimization | older B12X | PR8 small-M direct overlay present |
 | Kimi runtime policy | V2, TRITON_MLA, fp8 KV, AR off, standard+greedy MTP | same policy |
@@ -138,7 +139,7 @@ Use these values unless doing a strict A/B:
 | DCP2 no-MTP | 2 | 0 | 0.94 | target-only baseline, larger KV |
 | DCP4 + MTP | 4 | 1 | 0.90 | v5-compatible standard+greedy speculative profile |
 | DCP4 no-MTP | 4 | 0 | 0.94 | target-only baseline, larger KV |
-| DCP8 + MTP | 8 | 1 | 0.89 | v7 safe profile; `0.90` starts but OOMs in `fused_marlin_moe` |
+| DCP8 + MTP | 8 | 1 | 0.90 | starts, but decode requests crash in this v7 image; see notes |
 | DCP8 no-MTP | 8 | 0 | 0.94 | target-only baseline, larger KV |
 
 Important KV sizing policy:
@@ -147,9 +148,10 @@ Important KV sizing policy:
 - Let `llm_decode_bench.py` read vLLM KV capacity from `/metrics`.
 - Keep `--max-model-len 262144`, `--max-num-seqs 128`, and
   `--max-num-batched-tokens 8192`.
-- `DCP8/MTP=1` at `GPU_MEM=0.90` produced `2,741,376` KV tokens but OOMed during
-  first inference. The safe rerun uses `GPU_MEM=0.89`, producing `2,338,048`
-  KV tokens and completing the measured cells.
+- `DCP8/MTP=1` is not publishable in this v7 image. At `GPU_MEM=0.90` it
+  produced `2,741,376` KV tokens and then hit OOM / engine death during
+  inference. A lower `GPU_MEM=0.86` retry produced `1,652,736` KV tokens, but
+  still crashed with CUDA illegal memory access in DCP MLA metadata setup.
 
 ## Docker Run
 
@@ -163,9 +165,9 @@ set -euo pipefail
 IMAGE="${IMAGE:-voipmonitor/vllm:cu132-vllm2f5db31f9bcd-b12xfbb76ca3a914}"
 NAME="${NAME:-kimi-k26-v7}"
 PORT="${PORT:-8402}"
-DCP="${DCP:-8}"
+DCP="${DCP:-4}"
 MTP="${MTP:-1}"
-GPU_MEM="${GPU_MEM:-0.89}"
+GPU_MEM="${GPU_MEM:-0.90}"
 CACHE_ROOT="${CACHE_ROOT:-${HOME}/.cache/vllm-kimi-k26-v7}"
 MODEL_PATH="${MODEL_PATH:-${HOME}/.cache/huggingface/hub/models--moonshotai--Kimi-K2.6/snapshots/b5aabbfb20227ed42becbf5541dbffd213942c58}"
 
@@ -267,10 +269,10 @@ chmod +x /tmp/run-kimi-k26-v7
 Examples:
 
 ```bash
-# DCP8, standard+greedy MTP on, AR off. Use 0.89 for v7 DCP8/MTP headroom.
-PORT=8402 DCP=8 MTP=1 GPU_MEM=0.89 /tmp/run-kimi-k26-v7
+# DCP4, standard+greedy MTP on, AR off.
+PORT=8402 DCP=4 MTP=1 GPU_MEM=0.90 /tmp/run-kimi-k26-v7
 
-# DCP4 target-only baseline.
+# DCP4 target-only baseline with larger KV cache.
 PORT=8402 DCP=4 MTP=0 GPU_MEM=0.94 /tmp/run-kimi-k26-v7
 
 # DCP1 MTP on, v5-compatible memory profile.
@@ -410,8 +412,8 @@ services:
       MODEL: ${MODEL_PATH:-/root/.cache/huggingface/hub/models--moonshotai--Kimi-K2.6/snapshots/b5aabbfb20227ed42becbf5541dbffd213942c58}
       SERVED_MODEL_NAME: Kimi-K2.6
       TP_SIZE: "8"
-      DCP_SIZE: ${DCP:-8}
-      GPU_MEMORY_UTILIZATION: ${GPU_MEM:-0.89}
+      DCP_SIZE: ${DCP:-4}
+      GPU_MEMORY_UTILIZATION: ${GPU_MEM:-0.90}
       MAX_MODEL_LEN: "262144"
       MAX_NUM_BATCHED_TOKENS: "8192"
       MAX_NUM_SEQS: "128"
@@ -430,8 +432,8 @@ EOF
 Run:
 
 ```bash
-# DCP8 + MTP on. Use 0.89 for v7 DCP8/MTP headroom.
-DCP=8 KIMI_DISABLE_MTP=0 GPU_MEM=0.89 docker compose -f /tmp/kimi-k26-v7.compose.yaml up -d
+# DCP4 + MTP on.
+DCP=4 KIMI_DISABLE_MTP=0 GPU_MEM=0.90 docker compose -f /tmp/kimi-k26-v7.compose.yaml up -d
 
 # DCP1 no-MTP
 DCP=1 KIMI_DISABLE_MTP=1 GPU_MEM=0.94 docker compose -f /tmp/kimi-k26-v7.compose.yaml up -d
@@ -459,15 +461,19 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
   --contexts 0,128k \
   --duration 30 \
   --skip-prefill \
+  --max-tokens 8192 \
+  --temperature 0 \
   --dcp-size <DCP> \
   --display-mode plain \
   --no-hw-monitor \
-  --output /root/bench-results/kimi-v7-standard-greedy-matrix-cu132-vllm2f5db31-b12xfbb76ca-20260529/dcp<DCP>/mtp<MTP>/result.json
+  --output /root/bench-results/kimi-v7-local-matrix-clean-cu132-vllm2f5db31-b12xfbb76ca-20260529/dcp<DCP>/mtp<MTP>/result.json
 ```
 
 Do not use the older v7 draft command that passed `--kv-budget` manually. The
 measured rows below were collected without manual KV budget; the benchmark read
-KV capacity from vLLM metrics.
+KV capacity from vLLM metrics. Each DCP/MTP combination was started in a fresh
+container, and the runner verified that port `8402` was served by the intended
+container before measuring.
 
 Full matrix to run later:
 
@@ -479,6 +485,8 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
   --contexts 0,16k,32k,64k,128k \
   --duration 30 \
   --skip-prefill \
+  --max-tokens 8192 \
+  --temperature 0 \
   --dcp-size <DCP> \
   --display-mode plain \
   --no-hw-monitor \
@@ -487,28 +495,28 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
 
 ## Standard+Greedy Limited Sweep Results
 
-Result directories:
+Result directory:
 
 ```bash
-/root/bench-results/kimi-v7-standard-greedy-matrix-cu132-vllm2f5db31-b12xfbb76ca-20260529
-/root/bench-results/kimi-v7-standard-greedy-matrix-cu132-vllm2f5db31-b12xfbb76ca-20260529-dcp8mtp1-gpumem089
+/root/bench-results/kimi-v7-local-matrix-clean-cu132-vllm2f5db31-b12xfbb76ca-20260529
 ```
 
-These numbers were collected on helper host `10.229.14.14` on 2026-05-29 with
-30s sustained decode cells, AR off, V2 model runner, `ctx0` and `ctx128k`,
-`cc1` and `cc32`, and standard+greedy MTP for `MTP=1`. The helper host is a
-one-CPU system with different switches, so small transport differences versus
-the main host are possible.
+These numbers were collected on the local 8x RTX PRO 6000 Blackwell host on
+2026-05-29 with 30s sustained decode cells, AR off, V2 model runner, `ctx0` and
+`ctx128k`, `cc1` and `cc32`, `--max-tokens 8192`, `--temperature 0`, and
+standard+greedy MTP for `MTP=1`.
 
 Run command used:
 
 ```bash
 IMAGE=voipmonitor/vllm:cu132-vllm2f5db31f9bcd-b12xfbb76ca3a914 \
 DURATION=30 \
+MAX_TOKENS=8192 \
+TEMPERATURE=0 \
 DCP_LIST="1 2 4 8" \
 MTP_LIST="0 1" \
 CACHE_ROOT=/root/.cache/vllm-kimi-k26-v7 \
-/root/run_kimi_v7_standard_greedy_matrix_20260529.sh
+/root/bench-results/run_kimi_v7_standard_greedy_matrix_20260529.sh
 ```
 
 `acc` is the average speculative acceptance rate reported by server metrics for
@@ -521,29 +529,54 @@ all profiles in this limited sweep.
 
 | MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 0 | 0.94 | 491,344 | 99.3 | 0.000 | 987.9 | 0.000 | 51.0 | 0.000 | N/A | N/A | AR off, no MTP |
-| 1 | 0.90 | 342,672 | 92.3 | 0.398 | 1106.0 | 0.344 | 43.6 | 0.452 | N/A | N/A | AR off, standard+greedy MTP |
+| 0 | 0.94 | 491,344 | 89.4 | 0.000 | 1002.9 | 0.000 | 45.6 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 342,672 | 134.3 | 0.473 | 1226.6 | 0.417 | 62.9 | 0.346 | N/A | N/A | AR off, standard+greedy MTP |
 
 ### DCP 2
 
 | MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 0 | 0.94 | 982,688 | 86.8 | 0.000 | 807.4 | 0.000 | 60.2 | 0.000 | N/A | N/A | AR off, no MTP |
-| 1 | 0.90 | 685,344 | 67.0 | 0.357 | 672.8 | 0.395 | 42.2 | 0.400 | N/A | N/A | AR off, standard+greedy MTP |
+| 0 | 0.94 | 982,688 | 79.3 | 0.000 | 891.4 | 0.000 | 54.7 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 685,344 | 131.8 | 0.423 | 1089.4 | 0.397 | 77.7 | 0.402 | N/A | N/A | AR off, standard+greedy MTP |
 
 ### DCP 4
 
 | MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 0 | 0.94 | 1,965,376 | 83.8 | 0.000 | 736.1 | 0.000 | 60.9 | 0.000 | N/A | N/A | AR off, no MTP |
-| 1 | 0.90 | 1,370,688 | 66.4 | 0.318 | 594.4 | 0.373 | 36.0 | 0.367 | N/A | N/A | AR off, standard+greedy MTP |
+| 0 | 0.94 | 1,965,376 | 75.9 | 0.000 | 836.6 | 0.000 | 55.0 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 1,370,688 | 115.5 | 0.421 | 994.3 | 0.424 | 67.1 | 0.460 | N/A | N/A | AR off, standard+greedy MTP |
 
 ### DCP 8
 
 | MTP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c1 acc | 0/c32 tok/s | 0/c32 acc | 128k/c1 tok/s | 128k/c1 acc | 128k/c32 tok/s | 128k/c32 acc | Notes |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 0 | 0.94 | 3,930,752 | 82.1 | 0.000 | 438.5 | 0.000 | 64.6 | 0.000 | N/A | N/A | AR off, no MTP |
-| 1 | 0.89 | 2,338,048 | 100.1 | 0.404 | 416.1 | 0.412 | 55.3 | 0.377 | N/A | N/A | AR off, standard+greedy MTP; `GPU_MEM=0.89` safe rerun, `0.90` OOM in `fused_marlin_moe` |
+| 0 | 0.94 | 3,930,752 | 75.1 | 0.000 | 698.9 | 0.000 | 61.1 | 0.000 | N/A | N/A | AR off, no MTP |
+| 1 | 0.90 | 2,741,376 | crash | N/A | crash | N/A | crash | N/A | N/A | N/A | Server starts, but decode request kills engine; see notes |
+
+## DCP8 MTP Crash
+
+DCP8+MTP is not recorded as `0 tok/s` because the benchmark did not measure a
+slow server. The server starts and reports a usable KV cache, but measured
+decode requests kill the engine.
+
+Two local checks were run:
+
+| Run | GPU mem | KV cache tokens | Outcome |
+|---|---:|---:|---|
+| Full sweep | 0.90 | 2,741,376 | Initial 128k request hit CUDA OOM / engine death |
+| Headroom retry | 0.86 | 1,652,736 | No OOM, but first decode request hit CUDA illegal memory access |
+
+The headroom retry failed in `TRITON_MLA` DCP metadata construction:
+
+```text
+torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+vllm/v1/attention/backends/utils.py:get_dcp_local_seq_lens
+decode_context_parallel_size=8
+speculative_config=SpeculativeConfig(method='eagle3', model='festr2/kimi-k2.6-eagle3-mla-fp8', num_spec_tokens=3)
+```
+
+This makes DCP8+MTP a correctness/runtime issue in the v7 stack, not a valid
+throughput result. DCP8 no-MTP is valid.
 
 ## Comparison Against v5 Standard+Greedy
 
@@ -557,43 +590,47 @@ Short-context `cc1` comparison:
 
 | DCP | MTP | v5 tok/s | v7 tok/s | delta |
 |---:|---:|---:|---:|---:|
-| 1 | 0 | 89.7 | 99.3 | +10.7% |
-| 1 | 1 | 139.4 | 92.3 | -33.8% |
-| 2 | 0 | 79.2 | 86.8 | +9.6% |
-| 2 | 1 | 122.4 | 67.0 | -45.3% |
-| 4 | 0 | 76.1 | 83.8 | +10.1% |
-| 4 | 1 | 105.8 | 66.4 | -37.2% |
-| 8 | 0 | 74.8 | 82.1 | +9.8% |
-| 8 | 1 | 108.6 | 100.1 | -7.8% |
+| 1 | 0 | 89.7 | 89.4 | -0.3% |
+| 1 | 1 | 139.4 | 134.3 | -3.7% |
+| 2 | 0 | 79.2 | 79.3 | +0.1% |
+| 2 | 1 | 122.4 | 131.8 | +7.7% |
+| 4 | 0 | 76.1 | 75.9 | -0.3% |
+| 4 | 1 | 105.8 | 115.5 | +9.2% |
+| 8 | 0 | 74.8 | 75.1 | +0.4% |
+| 8 | 1 | 108.6 | crash | N/A |
 
 Short-context `cc32` comparison:
 
 | DCP | MTP | v5 tok/s | v7 tok/s | delta |
 |---:|---:|---:|---:|---:|
-| 1 | 0 | 999.4 | 987.9 | -1.2% |
-| 1 | 1 | 1166.5 | 1106.0 | -5.2% |
-| 2 | 0 | 885.4 | 807.4 | -8.8% |
-| 2 | 1 | 1050.2 | 672.8 | -35.9% |
-| 4 | 0 | 835.4 | 736.1 | -11.9% |
-| 4 | 1 | 966.3 | 594.4 | -38.5% |
-| 8 | 0 | 688.4 | 438.5 | -36.3% |
-| 8 | 1 | 697.8 | 416.1 | -40.4% |
+| 1 | 0 | 999.4 | 1002.9 | +0.4% |
+| 1 | 1 | 1166.5 | 1226.6 | +5.2% |
+| 2 | 0 | 885.4 | 891.4 | +0.7% |
+| 2 | 1 | 1050.2 | 1089.4 | +3.7% |
+| 4 | 0 | 835.4 | 836.6 | +0.1% |
+| 4 | 1 | 966.3 | 994.3 | +2.9% |
+| 8 | 0 | 688.4 | 698.9 | +1.5% |
+| 8 | 1 | 697.8 | crash | N/A |
 
-Main observation: no-MTP `cc1` improved versus v5, but MTP throughput regressed
-for DCP1/2/4 and `cc32` regressed increasingly with higher DCP. Acceptance is
-not zero; the regression is not explained by missing KV capacity or completely
-broken draft acceptance.
+Main observation from the local rerun: DCP1/2/4 are broadly in line with or
+slightly faster than the existing v5 standard+greedy baseline, while DCP8+MTP
+is not usable in this v7 image because decode requests crash the engine.
 
 ## Notes And Risks
 
-- v7 measurements use `llm_decode_bench.py` v0.4.24. Earlier draft v7 results
-  used an older benchmark and manual `--kv-budget`; do not mix those values with
+- v7 measurements use `llm_decode_bench.py` v0.4.24 with `--max-tokens 8192`
+  and `--temperature 0`. Earlier draft v7 results used helper host `10.229.14.14`,
+  an older benchmark, and manual `--kv-budget`; do not mix those values with
   this table.
 - KV cache values in this page are server-reported via `/metrics`, not guessed.
-- `DCP8/MTP=1` at `GPU_MEM=0.90` starts with `2,741,376` KV tokens but OOMs in
-  `fused_marlin_moe` on first inference. The publishable v7 row uses
-  `GPU_MEM=0.89`.
-- The currently observed MTP regression needs separate investigation against
-  v5. The MTP config itself matches v5 standard+greedy.
+- A stale local MTP server previously contaminated one no-MTP check on port
+  `8402`. The clean local sweep removed older Kimi v7 containers and verified
+  the intended container before each measurement.
+- `DCP8/MTP=1` currently has no publishable throughput row. `GPU_MEM=0.90`
+  can OOM, and `GPU_MEM=0.86` still crashes with CUDA illegal memory access in
+  `get_dcp_local_seq_lens`.
+- The comparison table uses the existing v5 standard+greedy wiki baseline. For
+  strict A/B regression work, rerun v5 locally with the exact same v0.4.24
+  benchmark, `--max-tokens 8192`, and `--temperature 0`.
 - Keep `NCCL_GRAPH_FILE`, `NCCL_GRAPH_DUMP_FILE`, and
   `VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` unset, not set to empty strings.
