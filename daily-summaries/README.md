@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-05-30](2026-05/2026-05-30.md) | DSv4 Flash hitting 245-250 tok/s on TP4 SM120 with luke's unholy-fusion branch + b12x MoE + MTP; luc |
 | [2026-05-29](2026-05/2026-05-29.md) | DSV4-Flash "unholy-fusion" branch hits 245 t/s decode (MTP off ~130, MTP on approaching 200): Luke m |
 | [2026-05-28](2026-05/2026-05-28.md) | DSV4-Flash SM120 breakthrough: `lucifer1004/dsv4-flash-sm120:latest` achieves full DeepGEMM prefill/ |
 | [2026-05-27](2026-05/2026-05-27.md) | Luke fixed a long-context bug in both sglang and vllm; took the jasl branch, stripped its kernels, s |
@@ -100,6 +101,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-05-30](2026-05/2026-05-30.md) | DSv4 Flash hitting 245-250 tok/s on TP4 SM120 with luke's unholy-fusion branch + b12x MoE + MTP; luc |
 | [2026-05-29](2026-05/2026-05-29.md) | DSV4-Flash "unholy-fusion" branch hits 245 t/s decode (MTP off ~130, MTP on approaching 200): Luke m |
 | [2026-05-28](2026-05/2026-05-28.md) | DSV4-Flash SM120 breakthrough: `lucifer1004/dsv4-flash-sm120:latest` achieves full DeepGEMM prefill/ |
 | [2026-05-27](2026-05/2026-05-27.md) | Luke fixed a long-context bug in both sglang and vllm; took the jasl branch, stripped its kernels, s |
