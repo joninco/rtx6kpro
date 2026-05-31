@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-05-31](2026-05/2026-05-31.md) | DS V4 Flash on tp=4 hits ~200 t/s decode, 94.6% prefix cache hit rate, ~3M KV cache with `cstechdev/ |
 | [2026-05-30](2026-05/2026-05-30.md) | DSv4 Flash hitting 245-250 tok/s on TP4 SM120 with luke's unholy-fusion branch + b12x MoE + MTP; luc |
 | [2026-05-29](2026-05/2026-05-29.md) | DSV4-Flash "unholy-fusion" branch hits 245 t/s decode (MTP off ~130, MTP on approaching 200): Luke m |
 | [2026-05-28](2026-05/2026-05-28.md) | DSV4-Flash SM120 breakthrough: `lucifer1004/dsv4-flash-sm120:latest` achieves full DeepGEMM prefill/ |
@@ -101,6 +102,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-05-31](2026-05/2026-05-31.md) | DS V4 Flash on tp=4 hits ~200 t/s decode, 94.6% prefix cache hit rate, ~3M KV cache with `cstechdev/ |
 | [2026-05-30](2026-05/2026-05-30.md) | DSv4 Flash hitting 245-250 tok/s on TP4 SM120 with luke's unholy-fusion branch + b12x MoE + MTP; luc |
 | [2026-05-29](2026-05/2026-05-29.md) | DSV4-Flash "unholy-fusion" branch hits 245 t/s decode (MTP off ~130, MTP on approaching 200): Luke m |
 | [2026-05-28](2026-05/2026-05-28.md) | DSV4-Flash SM120 breakthrough: `lucifer1004/dsv4-flash-sm120:latest` achieves full DeepGEMM prefill/ |
