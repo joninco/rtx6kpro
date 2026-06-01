@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-01](2026-06/2026-06-01.md) | MiniMax M3 launched — multimodal (text/image/video→text), 1M-token context, MiniMax Sparse Atten |
 | [2026-05-31](2026-05/2026-05-31.md) | DS V4 Flash on tp=4 hits ~200 t/s decode, 94.6% prefix cache hit rate, ~3M KV cache with `cstechdev/ |
 | [2026-05-30](2026-05/2026-05-30.md) | DSv4 Flash hitting 245-250 tok/s on TP4 SM120 with luke's unholy-fusion branch + b12x MoE + MTP; luc |
 | [2026-05-29](2026-05/2026-05-29.md) | DSV4-Flash "unholy-fusion" branch hits 245 t/s decode (MTP off ~130, MTP on approaching 200): Luke m |
@@ -102,6 +103,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-01](2026-06/2026-06-01.md) | MiniMax M3 launched — multimodal (text/image/video→text), 1M-token context, MiniMax Sparse Atten |
 | [2026-05-31](2026-05/2026-05-31.md) | DS V4 Flash on tp=4 hits ~200 t/s decode, 94.6% prefix cache hit rate, ~3M KV cache with `cstechdev/ |
 | [2026-05-30](2026-05/2026-05-30.md) | DSv4 Flash hitting 245-250 tok/s on TP4 SM120 with luke's unholy-fusion branch + b12x MoE + MTP; luc |
 | [2026-05-29](2026-05/2026-05-29.md) | DSV4-Flash "unholy-fusion" branch hits 245 t/s decode (MTP off ~130, MTP on approaching 200): Luke m |
