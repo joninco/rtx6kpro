@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-02](2026-06/2026-06-02.md) | luke's `apotheosis` vLLM branch hits 250.3 tok/s on DS4-Flash TP=2 c=1 with full AOT compilation, si |
 | [2026-06-01](2026-06/2026-06-01.md) | MiniMax M3 launched — multimodal (text/image/video→text), 1M-token context, MiniMax Sparse Atten |
 | [2026-05-31](2026-05/2026-05-31.md) | DS V4 Flash on tp=4 hits ~200 t/s decode, 94.6% prefix cache hit rate, ~3M KV cache with `cstechdev/ |
 | [2026-05-30](2026-05/2026-05-30.md) | DSv4 Flash hitting 245-250 tok/s on TP4 SM120 with luke's unholy-fusion branch + b12x MoE + MTP; luc |
@@ -103,6 +104,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-02](2026-06/2026-06-02.md) | luke's `apotheosis` vLLM branch hits 250.3 tok/s on DS4-Flash TP=2 c=1 with full AOT compilation, si |
 | [2026-06-01](2026-06/2026-06-01.md) | MiniMax M3 launched — multimodal (text/image/video→text), 1M-token context, MiniMax Sparse Atten |
 | [2026-05-31](2026-05/2026-05-31.md) | DS V4 Flash on tp=4 hits ~200 t/s decode, 94.6% prefix cache hit rate, ~3M KV cache with `cstechdev/ |
 | [2026-05-30](2026-05/2026-05-30.md) | DSv4 Flash hitting 245-250 tok/s on TP4 SM120 with luke's unholy-fusion branch + b12x MoE + MTP; luc |
