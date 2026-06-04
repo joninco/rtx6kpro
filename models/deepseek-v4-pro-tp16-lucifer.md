@@ -290,6 +290,61 @@ Live health check:
 curl -s http://10.229.14.14:8400/v1/models | python3 -m json.tool
 ```
 
+## Benchmark Artifact: `/root/benchmark_results.json`
+
+Important: this JSON does not identify the live DS4-Pro TP16 instance. It
+reports `model=Kimi-K2.6-NVFP4-B12X`, `server=localhost:8403`, and
+`gpu_count=8`, so treat these numbers as an attached benchmark artifact, not as
+DS4-Pro TP16 performance.
+
+| Field | Value |
+|---|---|
+| timestamp | `2026-06-04T16:46:44.431166` |
+| benchmark version | `0.4.24` |
+| reported model | `Kimi-K2.6-NVFP4-B12X` |
+| reported server | `localhost:8403` |
+| decode mode | `duration` |
+| duration per cell | `30s` |
+| max tokens | `8192` |
+| ignore eos | `True` |
+| contexts | `0, 16k, 32k, 64k, 128k` |
+| concurrency levels | `1, 2, 4, 8, 16, 32, 64, 128` |
+| P2P override effective | `True` |
+| burst/E2E | `not_run_use_--run-burst` |
+
+Prefill, client-measured TTFT path:
+
+| ctx | prompt tokens | TTFT s | client tok/s | server validation tok/s |
+|---:|---:|---:|---:|---:|
+| 8k | 8,187 | 1.073 | 7,630 | 0 |
+| 16k | 16,229 | 2.229 | 7,280 | 7,503 |
+| 32k | 32,307 | 4.819 | 6,704 | 6,876 |
+| 64k | 64,468 | 11.124 | 5,795 | 5,916 |
+| 128k | 128,785 | 27.947 | 4,608 | 4,684 |
+
+Sustained decode aggregate tok/s, 30s cells:
+
+| ctx \ conc | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 90.2 | 150.8 | 223.6 | 333.4 | 469.4 | 572.6 | 828.4 | 1097.4 |
+| 16k | 90.3 | 139.2 | 181.8 | 265.2 | 360.8 | 412.3 | — | — |
+| 32k | 77.8 | 116.9 | 154.3 | 215.7 | 282.0 | — | — | — |
+| 64k | 71.7 | 95.7 | 125.0 | 152.2 | — | — | — | — |
+| 128k | 52.3 | 67.8 | 83.7 | 98.7 | — | — | — | — |
+
+Aggregate hardware summary for the benchmark run:
+
+| Metric | Value |
+|---|---:|
+| GPU count | 8 |
+| GPU util avg | 90.1% |
+| GPU util max | 100.0% |
+| VRAM used avg | 99.0% |
+| Power avg W | 1,970 |
+| Power max W | 3,344 |
+| PCIe RX avg MB/s | 72,903 |
+| PCIe TX avg MB/s | 72,057 |
+
 ## Known Limitations
 
 The current fix is an overlay, not a clean upstream-quality branch. For a
