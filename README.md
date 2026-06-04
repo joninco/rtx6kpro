@@ -18,6 +18,7 @@ Community-sourced knowledge base for running large language models (Qwen3.5-397B
 | [Kimi-K2.6](models/kimi-k26.md) | MoE | — | 8× | Community image + MLA Eagle | [→](models/kimi-k26.md) |
 | [Kimi-K2.6 v6](models/kimi-k26-v6.md) | MoE | — | 8× | LightSeek Eagle3.1 MLA + vLLM V2 | [→](models/kimi-k26-v6.md) |
 | [Kimi-K2.6 v5](models/kimi-k26-v5.md) | MoE | — | 8× | CUDA 13.2 vLLM V2 + p/q MTP | [→](models/kimi-k26-v5.md) |
+| [DeepSeek-V4-Pro TP16 Lucifer](models/deepseek-v4-pro-tp16-lucifer.md) | MoE | — | 16× | Lucifer FP8 KV + MTP TP16 overlay | [→](models/deepseek-v4-pro-tp16-lucifer.md) |
 | [GLM-5](models/glm5.md) | 744B MoE | 40B | 8× | 105 tok/s (MTP) | [→](models/glm5.md) |
 | [GLM-5.1](models/glm5.1/README.md) | MoE | — | 8× | vLLM b12x NSA/MTP port | [→](models/glm5.1/README.md) |
 
