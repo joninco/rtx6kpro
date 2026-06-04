@@ -3,9 +3,10 @@
 Status: live smoke-tested on 2026-06-04 on `10.229.14.14`.
 
 This page records the exact Lucifer-based DS4-Pro TP16 run that starts on all
-16 GPUs with FP8 KV and MTP enabled. The image is not a clean source build: it
-is `cstechdev/dsv4-flash:latest` plus two site-packages overlay patches needed
-for true TP16.
+16 GPUs with FP8 KV and MTP enabled. The published image is our DockerHub tag
+`voipmonitor/vllm:ds4-pro-tp16-lucifer-vllm1967a5627bc3-fp8pad-wsfix-20260604`.
+It is not a clean source build: it is `cstechdev/dsv4-flash:latest` plus two
+site-packages overlay patches needed for true TP16.
 
 ## Current Instance
 
@@ -13,7 +14,7 @@ for true TP16.
 |---|---|
 | Host | `10.229.14.14` |
 | Container | `ds4-pro-lucifer-tp16-fp8pad` |
-| Image | `cstechdev/dsv4-flash:latest-tp16-fp8pad-wsfix` |
+| Image | `voipmonitor/vllm:ds4-pro-tp16-lucifer-vllm1967a5627bc3-fp8pad-wsfix-20260604` |
 | Model path | `/root/models/DeepSeek-V4-Pro` |
 | Served model | `deepseek-v4-pro` |
 | Port | `8400` |
@@ -46,7 +47,9 @@ allreduce path does not support `world_size=16`.
 | Base image ID | `sha256:70c3d635217676d1f9d5789e3ee67d6343be0ad04d2ca1a660668b891a2269e3` |
 | TP16 FP8 pad image | `cstechdev/dsv4-flash:latest-tp16-fp8pad` |
 | TP16 FP8 pad image ID | `sha256:edfb0b70a98e325c7b0a428376931703842a89154cde8d35d32957300ae548ec` |
-| Final wsfix image | `cstechdev/dsv4-flash:latest-tp16-fp8pad-wsfix` |
+| Final published image | `voipmonitor/vllm:ds4-pro-tp16-lucifer-vllm1967a5627bc3-fp8pad-wsfix-20260604` |
+| Final published digest | `sha256:bedfe52fc8d7ec41e34d84b342691603a6e70bf9b9705b2222e158281d81cb83` |
+| Local build tag on `10.229.14.14` | `cstechdev/dsv4-flash:latest-tp16-fp8pad-wsfix` |
 | Final wsfix image ID | `sha256:a6584693ce12b0f625ffcd80da2a65710ecab87bdb4f0c6f1b9ed60a72339e90` |
 | vLLM package | `0.21.1rc1.dev339+g1967a5627bc3` |
 | vLLM full commit resolved from GitHub | `1967a5627bc3710b680bbec24ecb99aaddedf22b` |
@@ -114,7 +117,7 @@ docker run -d --name ds4-pro-lucifer-tp16-fp8pad \
   -e CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 \
   -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
   -e NCCL_P2P_LEVEL=SYS \
-  cstechdev/dsv4-flash:latest-tp16-fp8pad-wsfix \
+  voipmonitor/vllm:ds4-pro-tp16-lucifer-vllm1967a5627bc3-fp8pad-wsfix-20260604 \
   serve /model \
   --served-model-name deepseek-v4-pro \
   --trust-remote-code \
@@ -245,7 +248,9 @@ What the patch changes:
 Resulting final image:
 
 ```text
-cstechdev/dsv4-flash:latest-tp16-fp8pad-wsfix
+voipmonitor/vllm:ds4-pro-tp16-lucifer-vllm1967a5627bc3-fp8pad-wsfix-20260604
+dockerhub digest: sha256:bedfe52fc8d7ec41e34d84b342691603a6e70bf9b9705b2222e158281d81cb83
+local build tag: cstechdev/dsv4-flash:latest-tp16-fp8pad-wsfix
 sha256:a6584693ce12b0f625ffcd80da2a65710ecab87bdb4f0c6f1b9ed60a72339e90
 ```
 
