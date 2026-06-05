@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-05](2026-06/2026-06-05.md) | New image: `lavd/vllm:b12x-nameless-ascent-6-4-13.2-2` — Luke's latest `nameless-ascent` branch, d |
 | [2026-06-04](2026-06/2026-06-04.md) | New Docker image `voipmonitor/dsv4-flash:lucifer-mxfp4-cutlass-20260603` released — lucifer base w |
 | [2026-06-03](2026-06/2026-06-03.md) | DS4F prefix cache fix merged to vllm main ([PR #44082](https://github.com/vllm-project/vllm/pull/440 |
 | [2026-06-02](2026-06/2026-06-02.md) | luke's `apotheosis` vLLM branch hits 250.3 tok/s on DS4-Flash TP=2 c=1 with full AOT compilation, si |
@@ -106,6 +107,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-05](2026-06/2026-06-05.md) | New image: `lavd/vllm:b12x-nameless-ascent-6-4-13.2-2` — Luke's latest `nameless-ascent` branch, d |
 | [2026-06-04](2026-06/2026-06-04.md) | New Docker image `voipmonitor/dsv4-flash:lucifer-mxfp4-cutlass-20260603` released — lucifer base w |
 | [2026-06-03](2026-06/2026-06-03.md) | DS4F prefix cache fix merged to vllm main ([PR #44082](https://github.com/vllm-project/vllm/pull/440 |
 | [2026-06-02](2026-06/2026-06-02.md) | luke's `apotheosis` vLLM branch hits 250.3 tok/s on DS4-Flash TP=2 c=1 with full AOT compilation, si |
