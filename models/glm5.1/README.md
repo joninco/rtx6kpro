@@ -6,6 +6,7 @@ This section tracks GLM-5.1 experiments on RTX PRO 6000 Blackwell PCIe systems.
 
 | Date | Report | Scope |
 |---|---|---|
+| 2026-06-07 | [GLM-5.1 v9 BF16 TP16 DCP8 16-GPU runbook](../glm5.1_v9.md) | Exact Docker image, model path, 16-GPU TP16/DCP8 launch command, KV-cache sizing, required shared-experts overlay, startup log signatures, smoke tests, and known bad memory settings for the BF16 GLM-5.1 runtime. |
 | 2026-05-25 | [GLM-5.1 teacher-forced decode KLD / JS reproduction](glm51-teacher-forced-decode-kld-js-2026-05-25.md) | Reproducible BF16-reference decode KLD/JS workflow, Hugging Face reference logits, helper scripts, exact single-prompt and 8-prompt commands, metric interpretation, and current NVFP4/mixed-FP8 results. |
 | 2026-05-25 | [GLM-5.1 v4 mixed FP8 native W4A16 recipe](../glm5.1_v4.md) | Current GLM-5.1 mixed FP8PBWO L42-62 serving profile with native ModelOpt W4A16 decode, exact DockerHub tag, source branches/commits, DCP4+MTP launch recipe, KV-cache state, and KLD smoke result. |
 | 2026-05-16 | [GLM-5.1 NVFP4 KLD sensitivity resume](glm51-nvfp4-kld-sensitivity-2026-05-16.md) | Complete KLD checkpoint for GLM-5.1 NVFP4/W4A16, BF16 oracle sweeps, local quant-toolkit export fixes, mixed FP8_PB_WO expert-layer checkpoint construction, public HF upload workflow, and current quality/memory tradeoff candidates. |
