@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-07](2026-06/2026-06-07.md) | DSV4-Flash prefix cache bug confirmed: On TP=4, the cache was evicting early and only utilizing ~200 |
 | [2026-06-06](2026-06/2026-06-06.md) | New Docker image `voipmonitor/vllm:abyssal-abjuration-611a842` released with rebased vllm + latest f |
 | [2026-06-05](2026-06/2026-06-05.md) | New image: `lavd/vllm:b12x-nameless-ascent-6-4-13.2-2` — Luke's latest `nameless-ascent` branch, d |
 | [2026-06-04](2026-06/2026-06-04.md) | New Docker image `voipmonitor/dsv4-flash:lucifer-mxfp4-cutlass-20260603` released — lucifer base w |
@@ -108,6 +109,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-07](2026-06/2026-06-07.md) | DSV4-Flash prefix cache bug confirmed: On TP=4, the cache was evicting early and only utilizing ~200 |
 | [2026-06-06](2026-06/2026-06-06.md) | New Docker image `voipmonitor/vllm:abyssal-abjuration-611a842` released with rebased vllm + latest f |
 | [2026-06-05](2026-06/2026-06-05.md) | New image: `lavd/vllm:b12x-nameless-ascent-6-4-13.2-2` — Luke's latest `nameless-ascent` branch, d |
 | [2026-06-04](2026-06/2026-06-04.md) | New Docker image `voipmonitor/dsv4-flash:lucifer-mxfp4-cutlass-20260603` released — lucifer base w |
