@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-08](2026-06/2026-06-08.md) | a8 vs a16 accuracy test (900 runs): Jon ran Estonia, hotel-lights, and lavd benchmarks; a8 won or ti |
 | [2026-06-07](2026-06/2026-06-07.md) | DSV4-Flash prefix cache bug confirmed: On TP=4, the cache was evicting early and only utilizing ~200 |
 | [2026-06-06](2026-06/2026-06-06.md) | New Docker image `voipmonitor/vllm:abyssal-abjuration-611a842` released with rebased vllm + latest f |
 | [2026-06-05](2026-06/2026-06-05.md) | New image: `lavd/vllm:b12x-nameless-ascent-6-4-13.2-2` — Luke's latest `nameless-ascent` branch, d |
@@ -109,6 +110,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-08](2026-06/2026-06-08.md) | a8 vs a16 accuracy test (900 runs): Jon ran Estonia, hotel-lights, and lavd benchmarks; a8 won or ti |
 | [2026-06-07](2026-06/2026-06-07.md) | DSV4-Flash prefix cache bug confirmed: On TP=4, the cache was evicting early and only utilizing ~200 |
 | [2026-06-06](2026-06/2026-06-06.md) | New Docker image `voipmonitor/vllm:abyssal-abjuration-611a842` released with rebased vllm + latest f |
 | [2026-06-05](2026-06/2026-06-05.md) | New image: `lavd/vllm:b12x-nameless-ascent-6-4-13.2-2` — Luke's latest `nameless-ascent` branch, d |
