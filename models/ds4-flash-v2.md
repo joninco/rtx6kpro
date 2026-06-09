@@ -416,14 +416,10 @@ B12X aggregate decode tok/s:
 
 B12X warm prefill rerun, MTP on:
 
-| TP | MTP | ctx | tokens | TTFT s | tok/s | samples |
-|:---:|:---:|---:|---:|---:|---:|---:|
-| TP2 | on | 8k | 8,194 | 1.174 | 6,978 | 7 |
-| TP2 | on | 64k | 64,561 | 9.718 | 6,644 | 1 |
-| TP2 | on | 128k | 128,994 | 20.962 | 6,154 | 1 |
-| TP4 | on | 8k | 8,195 | 0.995 | 8,236 | 10 |
-| TP4 | on | 64k | 64,562 | 8.288 | 7,790 | 2 |
-| TP4 | on | 128k | 128,995 | 17.973 | 7,177 | 1 |
+| TP | MTP | 8k tok/s | 64k tok/s | 128k tok/s |
+|:---:|:---:|---:|---:|---:|
+| TP2 | on | 6,978 | 6,644 | 6,154 |
+| TP4 | on | 8,236 | 7,790 | 7,177 |
 
 B12X no-MTP prefill was not remeasured in the 2026-06-09 rerun, so it is not
 used for prefill speedup claims.
@@ -458,14 +454,14 @@ Lucifer aggregate decode tok/s:
 
 Lucifer prefill:
 
-| TP | MTP | Draft sampling | 8k tok/s | 64k tok/s | 128k tok/s | 8k TTFT | 64k TTFT | 128k TTFT |
-|---|---|---|---:|---:|---:|---:|---:|---:|
-| TP2 | off | none | 13,508 | 12,788 | 11,705 | 0.607s | 5.048s | 11.019s |
-| TP2 | on | greedy/default | 13,315 | 12,483 | 11,457 | 0.615s | 5.171s | 11.258s |
-| TP2 | on | probabilistic | 13,291 | 12,478 | 11,464 | 0.616s | 5.173s | 11.251s |
-| TP4 | off | none | 15,919 | 14,906 | 13,575 | 0.515s | 4.331s | 9.501s |
-| TP4 | on | greedy/default | 15,219 | 14,279 | 13,069 | 0.538s | 4.521s | 9.869s |
-| TP4 | on | probabilistic | 15,215 | 14,282 | 13,071 | 0.538s | 4.520s | 9.867s |
+| TP | MTP | Draft sampling | 8k tok/s | 64k tok/s | 128k tok/s |
+|---|---|---|---:|---:|---:|
+| TP2 | off | none | 13,508 | 12,788 | 11,705 |
+| TP2 | on | greedy/default | 13,315 | 12,483 | 11,457 |
+| TP2 | on | probabilistic | 13,291 | 12,478 | 11,464 |
+| TP4 | off | none | 15,919 | 14,906 | 13,575 |
+| TP4 | on | greedy/default | 15,219 | 14,279 | 13,069 |
+| TP4 | on | probabilistic | 15,215 | 14,282 | 13,071 |
 
 Lucifer probabilistic MTP vs greedy/default decode ratio:
 
