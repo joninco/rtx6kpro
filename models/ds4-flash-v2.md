@@ -141,6 +141,11 @@ launch logs show only `{'method': 'mtp', 'num_speculative_tokens': 2}` in
 `greedy`. The compose below sets it explicitly to keep the recipe
 reproducible.
 
+Lucifer MTP probabilistic was remeasured by changing only
+`--speculative-config.draft_sample_method probabilistic`. The probabilistic
+rerun confirmed the setting in the server log and is listed separately in the
+speed tables.
+
 Lucifer TP2 MTP speed sweep used `--max-model-len 245760`, because
 `393216` did not fit with MTP graph capture at `gpu_memory_utilization=0.88`.
 The measured prefill contexts still include 128k, so this does not affect the
@@ -257,10 +262,11 @@ services:
         "$${SPEC_ARGS[@]}"
 ```
 
-Lucifer Cutlass compose. Defaults are TP4, MTP on, `flashinfer_cutlass` MoE,
-and graph cap `192`. For no-MTP use `MTP=0` and
-`MAX_CUDAGRAPH_CAPTURE_SIZE=64`. For TP2 MTP use `TP_SIZE=2`, two visible GPUs,
-and `MAX_MODEL_LEN=245760` if `393216` does not fit.
+Lucifer Cutlass compose. Defaults are TP4, MTP on, greedy draft sampling,
+`flashinfer_cutlass` MoE, and graph cap `192`. For probabilistic MTP set
+`DRAFT_SAMPLE_METHOD=probabilistic`. For no-MTP use `MTP=0` and
+`MAX_CUDAGRAPH_CAPTURE_SIZE=64`. For TP2 MTP use `TP_SIZE=2`, two visible
+GPUs, and `MAX_MODEL_LEN=245760` if `393216` does not fit.
 
 ```yaml
 services:
@@ -436,25 +442,37 @@ Lucifer speed result root:
 
 ```text
 /root/bench-results/ds4-lucifer-cutlass-20260609/speed-sweep-v2/
+/root/bench-results/ds4-lucifer-cutlass-20260609/speed-sweep-probabilistic/
 ```
 
 Lucifer aggregate decode tok/s:
 
-| TP | MTP | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| TP2 | off | 124.4 | 207.8 | 352.0 | 570.8 | 856.9 | 1,267.4 | 1,940.9 |
-| TP2 | on | 200.9 | 337.2 | 381.8 | 763.6 | 1,128.7 | 1,749.8 | 2,660.3 |
-| TP4 | off | 137.8 | 243.7 | 436.2 | 751.2 | 1,176.8 | 1,790.0 | 2,686.2 |
-| TP4 | on | 237.0 | 412.8 | 562.3 | 1,076.0 | 1,606.3 | 2,508.5 | 3,670.9 |
+| TP | MTP | Draft sampling | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| TP2 | off | none | 124.4 | 207.8 | 352.0 | 570.8 | 856.9 | 1,267.4 | 1,940.9 |
+| TP2 | on | greedy/default | 200.9 | 337.2 | 381.8 | 763.6 | 1,128.7 | 1,749.8 | 2,660.3 |
+| TP2 | on | probabilistic | 207.7 | 354.7 | 410.1 | 808.1 | 1,192.0 | 1,871.2 | 2,823.6 |
+| TP4 | off | none | 137.8 | 243.7 | 436.2 | 751.2 | 1,176.8 | 1,790.0 | 2,686.2 |
+| TP4 | on | greedy/default | 237.0 | 412.8 | 562.3 | 1,076.0 | 1,606.3 | 2,508.5 | 3,670.9 |
+| TP4 | on | probabilistic | 242.1 | 434.3 | 579.1 | 1,140.7 | 1,689.4 | 2,662.8 | 3,912.9 |
 
 Lucifer prefill:
 
-| TP | MTP | 8k tok/s | 64k tok/s | 128k tok/s | 8k TTFT | 64k TTFT | 128k TTFT |
-|---|---|---:|---:|---:|---:|---:|---:|
-| TP2 | off | 13,508 | 12,788 | 11,705 | 0.607s | 5.048s | 11.019s |
-| TP2 | on | 13,315 | 12,483 | 11,457 | 0.615s | 5.171s | 11.258s |
-| TP4 | off | 15,919 | 14,906 | 13,575 | 0.515s | 4.331s | 9.501s |
-| TP4 | on | 15,219 | 14,279 | 13,069 | 0.538s | 4.521s | 9.869s |
+| TP | MTP | Draft sampling | 8k tok/s | 64k tok/s | 128k tok/s | 8k TTFT | 64k TTFT | 128k TTFT |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| TP2 | off | none | 13,508 | 12,788 | 11,705 | 0.607s | 5.048s | 11.019s |
+| TP2 | on | greedy/default | 13,315 | 12,483 | 11,457 | 0.615s | 5.171s | 11.258s |
+| TP2 | on | probabilistic | 13,291 | 12,478 | 11,464 | 0.616s | 5.173s | 11.251s |
+| TP4 | off | none | 15,919 | 14,906 | 13,575 | 0.515s | 4.331s | 9.501s |
+| TP4 | on | greedy/default | 15,219 | 14,279 | 13,069 | 0.538s | 4.521s | 9.869s |
+| TP4 | on | probabilistic | 15,215 | 14,282 | 13,071 | 0.538s | 4.520s | 9.867s |
+
+Lucifer probabilistic MTP vs greedy/default decode ratio:
+
+| TP | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| TP2 | 1.03x | 1.05x | 1.07x | 1.06x | 1.06x | 1.07x | 1.06x |
+| TP4 | 1.02x | 1.05x | 1.03x | 1.06x | 1.05x | 1.06x | 1.07x |
 
 Lucifer startup logs show FlashInfer autotune warnings for some MTP shapes
 outside the tuned MoE bucket range; those warnings did not prevent completion,
@@ -464,24 +482,29 @@ but they are relevant when interpreting possible single-cell speed cliffs.
 
 Decode speedup is Lucifer/B12X. Values above `1.00x` mean Lucifer is faster.
 
-| TP | MTP | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| TP2 | off | 0.94x | 0.94x | 0.98x | 1.05x | 1.10x | 1.16x | 1.31x |
-| TP2 | on | 0.90x | 0.95x | 0.73x | 1.03x | 1.12x | 1.28x | 1.49x |
-| TP4 | off | 0.87x | 0.87x | 0.92x | 0.99x | 1.04x | 1.08x | 1.17x |
-| TP4 | on | 0.83x | 0.88x | 0.78x | 1.00x | 1.07x | 1.26x | 1.44x |
+| TP | MTP | Lucifer draft sampling | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| TP2 | off | none | 0.94x | 0.94x | 0.98x | 1.05x | 1.10x | 1.16x | 1.31x |
+| TP2 | on | greedy/default | 0.90x | 0.95x | 0.73x | 1.03x | 1.12x | 1.28x | 1.49x |
+| TP2 | on | probabilistic | 0.93x | 1.00x | 0.79x | 1.09x | 1.18x | 1.37x | 1.58x |
+| TP4 | off | none | 0.87x | 0.87x | 0.92x | 0.99x | 1.04x | 1.08x | 1.17x |
+| TP4 | on | greedy/default | 0.83x | 0.88x | 0.78x | 1.00x | 1.07x | 1.26x | 1.44x |
+| TP4 | on | probabilistic | 0.85x | 0.92x | 0.80x | 1.07x | 1.12x | 1.33x | 1.54x |
 
 Prefill speedup is available only for MTP-on, because B12X no-MTP prefill was
 not remeasured in the comparable 2026-06-09 rerun.
 
-| TP | MTP | 8k | 64k | 128k |
-|---|---|---:|---:|---:|
-| TP2 | on | 1.91x | 1.88x | 1.86x |
-| TP4 | on | 1.85x | 1.83x | 1.82x |
+| TP | MTP | Lucifer draft sampling | 8k | 64k | 128k |
+|---|---|---|---:|---:|---:|
+| TP2 | on | greedy/default | 1.91x | 1.88x | 1.86x |
+| TP2 | on | probabilistic | 1.90x | 1.88x | 1.86x |
+| TP4 | on | greedy/default | 1.85x | 1.83x | 1.82x |
+| TP4 | on | probabilistic | 1.85x | 1.83x | 1.82x |
 
 Interpretation: B12X remains faster for low-concurrency decode cells, but
-Lucifer becomes faster at higher concurrency. Lucifer prefill is roughly
-1.8-1.9x faster than the B12X MTP-on rerun.
+Lucifer becomes faster at higher concurrency. Lucifer probabilistic MTP is
+about 2-7% faster than Lucifer greedy/default MTP in this decode sweep.
+Lucifer prefill is roughly 1.8-1.9x faster than the B12X MTP-on rerun.
 
 ## KLD vs H200
 
