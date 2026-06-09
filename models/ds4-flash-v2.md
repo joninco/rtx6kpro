@@ -2,8 +2,8 @@
 
 Measured on 2026-06-08 and 2026-06-09 on the local 16x RTX PRO 6000 Blackwell
 host. This page records the Black Benediction image with B12X PR11 for
-DeepSeek-V4-Flash TP2/TP4, MTP on/off decode speed, and 30-run profile quality
-checks.
+DeepSeek-V4-Flash TP2/TP4, MTP on/off decode speed, prefill speed, H200 KLD
+comparison, and profile quality checks.
 
 Status: TP2 and TP4 start with B12X MLA sparse attention, B12X MoE/linear,
 V2 model runner, CUDA graphs, `max_num_seqs=64`, and MTP2. The PR11 B12X
@@ -61,10 +61,11 @@ DeepSeek-V4-Flash
 
 ## Runtime Profile
 
-Local helper used for the measurements:
+Local helpers used for the measurements:
 
 ```text
 /root/run-ds4-flash-black-pr11
+/root/vllm/tmp/run_ds4_pr11_server.sh
 ```
 
 Important defaults:
@@ -75,17 +76,18 @@ Important defaults:
 | Tensor parallel | `TP_SIZE=2` or `TP_SIZE=4` |
 | MTP | set by `MTP=0|1` |
 | MTP tokens | `2` |
-| MTP draft sampling | `probabilistic` |
+| MTP draft sampling | `probabilistic`; greedy measured separately |
 | MTP local argmax reduction | `true` |
 | Max num seqs | `64` |
-| Max batched tokens | `4096` |
+| Max batched tokens | `4096` for the original speed matrix, `8192` for the 2026-06-09 reruns |
 | CUDA graph cap | `64` no-MTP, `192` MTP |
-| Max model len | `130000` for speed matrix, `262144` for profile farm |
+| Max model len | `130000` for the original speed matrix, `262144` for profile/prefill/greedy reruns |
 | KV cache dtype | `fp8` |
 | Attention backend | `B12X_MLA_SPARSE` |
 | MoE backend | `b12x` |
 | Linear backend | `b12x` |
-| GPU memory utilization | `0.875` speed matrix, `0.90` profile farm |
+| GPU memory utilization | `0.875` speed matrix, `0.88` prefill/greedy reruns, `0.90` profile farm |
+| DS4 chat kwargs for quality rerun | `{"thinking": true, "reasoning_effort": "high"}` |
 
 Important: unset empty NCCL graph variables before `vllm serve`:
 
@@ -118,6 +120,9 @@ MTP config used by the helper:
 }
 ```
 
+For the greedy rerun only `draft_sample_method` changed to `greedy`; local
+argmax reduction stayed enabled and the smoke test remained coherent.
+
 Readiness check:
 
 ```bash
@@ -127,11 +132,13 @@ docker logs ds4-flash-black-pr11 2>&1 | grep -E 'GPU KV cache size|Maximum concu
 
 ## Correctness Smoke
 
-All four speed-matrix services passed the local smoke test with coherent output
-and `chinese_count=0` before decode measurement:
+All speed-matrix and greedy services passed the local smoke test with coherent
+output and `chinese_count=0` before decode measurement:
 
 ```text
 /root/bench-results/ds4-black-pr11-20260608/smoke/
+/root/bench-results/ds4-black-pr11-20260609/greedy-tp2-smoke.txt
+/root/bench-results/ds4-black-pr11-20260609/greedy-tp4-smoke.txt
 ```
 
 ## Decode Speed
@@ -155,46 +162,128 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
 
 Aggregate decode tok/s:
 
-| TP | MTP | C1 | C2 | C4 | C8 | C16 | C32 | C64 | Accept avg |
-|:---:|:---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| TP2 | off | 131.7 | 220.4 | 359.7 | 541.6 | 780.3 | 1,091.0 | 1,486.6 | 0.000 |
-| TP2 | on | 222.5 | 355.4 | 521.7 | 738.8 | 1,006.6 | 1,369.5 | 1,786.6 | 0.687 |
-| TP4 | off | 159.2 | 279.7 | 472.1 | 759.5 | 1,135.4 | 1,656.6 | 2,299.8 | 0.000 |
-| TP4 | on | 285.4 | 470.9 | 724.5 | 1,071.1 | 1,504.3 | 1,996.9 | 2,544.7 | 0.706 |
+| TP | MTP | Draft sampling | C1 | C2 | C4 | C8 | C16 | C32 | C64 | Accept avg |
+|:---:|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| TP2 | off | none | 131.7 | 220.4 | 359.7 | 541.6 | 780.3 | 1,091.0 | 1,486.6 | 0.000 |
+| TP2 | on | probabilistic | 222.5 | 355.4 | 521.7 | 738.8 | 1,006.6 | 1,369.5 | 1,786.6 | 0.687 |
+| TP2 | on | greedy | 189.3 | 294.3 | 433.7 | 596.5 | 821.3 | 1,055.6 | 1,311.4 | 0.547 |
+| TP4 | off | none | 159.2 | 279.7 | 472.1 | 759.5 | 1,135.4 | 1,656.6 | 2,299.8 | 0.000 |
+| TP4 | on | probabilistic | 285.4 | 470.9 | 724.5 | 1,071.1 | 1,504.3 | 1,996.9 | 2,544.7 | 0.706 |
+| TP4 | on | greedy | 247.3 | 404.8 | 607.7 | 915.4 | 1,203.5 | 1,689.8 | 2,032.2 | 0.538 |
 
 Result JSONs:
 
 ```text
 /root/bench-results/ds4-black-pr11-20260608/decode-sweep/
+/root/bench-results/ds4-black-pr11-20260609/decode-greedy/
 ```
 
 For TP4, use the `*-fullcc.json` files for the headline because the first run
 auto-skipped some high-concurrency cells before the explicit KV budget rerun.
 
+## Prefill Speed
+
+Benchmark:
+
+```bash
+python3 /root/llm-inference-bench/llm_decode_bench.py \
+  --host 127.0.0.1 \
+  --port PORT \
+  --model DeepSeek-V4-Flash \
+  --prefill-only \
+  --prefill-contexts 8k,64k,128k \
+  --prefill-duration 10 \
+  --max-tokens 16 \
+  --output OUT.json
+```
+
+Warm prefill rerun, client prompt tokens / TTFT:
+
+| TP | MTP | ctx | tokens | TTFT s | tok/s | samples |
+|:---:|:---:|---:|---:|---:|---:|---:|
+| TP2 | on | 8k | 8,194 | 1.174 | 6,978 | 7 |
+| TP2 | on | 64k | 64,561 | 9.718 | 6,644 | 1 |
+| TP2 | on | 128k | 128,994 | 20.962 | 6,154 | 1 |
+| TP4 | on | 8k | 8,195 | 0.995 | 8,236 | 10 |
+| TP4 | on | 64k | 64,562 | 8.288 | 7,790 | 2 |
+| TP4 | on | 128k | 128,995 | 17.973 | 7,177 | 1 |
+
+The first TP2 8k run was a cold/warmup outlier: `3,987 tok/s` on rerun 1 and
+`6,978 tok/s` on rerun 2. TP4 8k was stable across the two reruns
+(`8,350` then `8,236 tok/s`).
+
+Result JSONs:
+
+```text
+/root/bench-results/ds4-black-pr11-20260609/prefill-rerun/
+```
+
+## KLD vs H200
+
+Reference:
+
+```text
+/root/vllm/artifacts/ds4_flash_2xh200_ref_logits_20260607/nomtp_tp2
+```
+
+Current B12X PR11 capture:
+
+```text
+/root/vllm/artifacts/ds4_flash_local_black_pr11_logits_20260609/nomtp_tp2_black_pr11_b12x_rowmeta_fullrows_fullcalls128
+```
+
+KLD summary, lower is better:
+
+| Variant | Matched rows | Mean | Median | p90 | p99 | Max |
+|---|---:|---:|---:|---:|---:|---:|
+| B12X PR11 current TP2 no-MTP | 216 | 0.04048 | 0.00654 | 0.11784 | 0.40691 | 0.43863 |
+| lucifer cutlass rowmeta fullrows | 350 | 0.02777 | 0.00699 | 0.07651 | 0.21563 | 0.43425 |
+| b12x attention/linear + cutlass MoE default | n/a | 0.02719 | 0.00526 | 0.08437 | 0.24788 | 0.50644 |
+| b12x attention/linear + cutlass MoE piecewise nobreak | n/a | 0.02884 | 0.00420 | 0.08437 | 0.30857 | 0.50644 |
+| b12x offline spawn rowmeta fullrows | n/a | 0.02894 | 0.00692 | 0.08168 | 0.33458 | 0.34684 |
+| cstechdev default rowmeta fullrows | n/a | 0.02920 | 0.00534 | 0.09020 | 0.30459 | 0.36811 |
+
+The current B12X PR11 mean is worse than the best historical good runs, but it
+is far from the previously broken variants with mean KLD around `1.15+`.
+Matched rows are still limited by capture metadata/global-row alignment, not by
+missing H200 reference logits.
+
+Result JSON:
+
+```text
+/root/vllm/artifacts/ds4_flash_local_black_pr11_logits_20260609/nomtp_tp2_black_pr11_b12x_rowmeta_fullrows_fullcalls128/kld_vs_h200_ref_global_rows_allprompts.json
+```
+
 ## Profile Farm
 
 The 30-run quality farm used eight TP2+MTP2 replicas on ports `5500-5507`,
-one GPU pair per replica, `MAX_MODEL_LEN=262144`, `GPU_MEMORY_UTILIZATION=0.90`,
-and `max_num_seqs=64`.
+one GPU pair per replica, `MAX_MODEL_LEN=262144`, and `max_num_seqs=64`.
+The estonia rerun used `thinking=true` and `reasoning_effort=high`. Because the
+prompt is about `134k` tokens and each TP2 replica had only about `320k` KV
+tokens, the rerun used one request per replica per wave.
 
 Results:
 
 ```text
 /root/bench-results/ds4-black-pr11-20260608/profiles-262k/
+/root/bench-results/ds4-black-pr11-20260609/estonia-thinking-high/
 ```
 
 Profile summary:
 
 | Profile | Samples | Score | Output tok avg | Output tok p50 | Elapsed avg | Gen tok/s avg |
 |---|---:|---|---:|---:|---:|---:|
-| estonia | 30 | PASS 11 / FAIL 19 | 161.2 | 148.0 | 1.4s | 216.1 |
+| estonia, initial/default kwargs | 30 | PASS 11 / FAIL 19 | 161.2 | 148.0 | 1.4s | 216.1 |
+| estonia, `thinking=true`, `reasoning_effort=high` | 30 | PASS 30 / FAIL 0 | 2,111.0 | 1,510.0 | 11.0s | 204.0 |
 | lavd-test | 30 | EXACT 2 / NEAR 2 / FAIL 26 | 2,290.7 | 275.5 | 15.2s | 156.2 |
 | hotel | 30 | FAIL 30 | 3,407.5 | 2,953.5 | 24.5s | 137.5 |
 
 ## Notes
 
 - The speed matrix is healthy and coherent for the short smoke tests.
-- The profile quality results are weak; they are recorded as measured, not as a
-  pass/fail endorsement of the model configuration.
+- The original profile quality results are weak without the DS4 thinking/high
+  override; estonia becomes stable at `PASS 30/30` with the override.
+- Greedy MTP works with local argmax enabled, but was slower than probabilistic
+  MTP in this matrix.
 - The key B12X PR11 fix is the compressed MLA decode split threshold for MTP
   full graph rows up to `64 * (1 + 2) = 192`.
