@@ -59,7 +59,7 @@ Relevant Standard Lucifer source state:
 | Component | Revision |
 |---|---|
 | Docker recipe repo | [local-inference-lab/blackwell-llm-docker](https://github.com/local-inference-lab/blackwell-llm-docker) |
-| Docker recipe commit | [7e54b18](https://github.com/local-inference-lab/blackwell-llm-docker/commit/7e54b18) |
+| Docker recipe commit | [f24137e](https://github.com/local-inference-lab/blackwell-llm-docker/commit/f24137e) |
 | vLLM branch | [local-inference-lab/vllm/tree/lucifer](https://github.com/local-inference-lab/vllm/tree/lucifer) |
 | vLLM commit | [7c6bbf4c5a482e100af886c5b6eb4303746cc3ba](https://github.com/local-inference-lab/vllm/commit/7c6bbf4c5a482e100af886c5b6eb4303746cc3ba) |
 | CUDA | `13.2.1` |
@@ -99,7 +99,7 @@ Exact rebuild:
 ```bash
 git clone https://github.com/local-inference-lab/blackwell-llm-docker.git
 cd blackwell-llm-docker
-git checkout 7e54b18
+git checkout f24137e
 
 IMAGE=voipmonitor/vllm:lucifer-vllm7c6bbf4-fi3395b41aa8d-dg324aced12c-tk9801a7-cu132-20260609 \
 ALIAS_IMAGE=voipmonitor/vllm:lucifer \
