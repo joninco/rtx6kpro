@@ -262,16 +262,17 @@ services:
         "$${SPEC_ARGS[@]}"
 ```
 
-Lucifer Cutlass compose. Defaults are TP4, MTP on, greedy draft sampling,
-`flashinfer_cutlass` MoE, and graph cap `192`. For probabilistic MTP set
-`DRAFT_SAMPLE_METHOD=probabilistic`. For no-MTP use `MTP=0` and
-`MAX_CUDAGRAPH_CAPTURE_SIZE=64`. For TP2 MTP use `TP_SIZE=2`, two visible
-GPUs, and `MAX_MODEL_LEN=245760` if `393216` does not fit.
+Lucifer Cutlass compose. Defaults are TP4, MTP on, probabilistic draft
+sampling, forced C++ PCIe all-reduce selector with `56KB` cutoff,
+`flashinfer_cutlass` MoE, and graph cap `192`. Keep
+`DRAFT_SAMPLE_METHOD=probabilistic` unless a benchmark explicitly states
+otherwise. For no-MTP use `MTP=0` and `MAX_CUDAGRAPH_CAPTURE_SIZE=64`.
+For TP2 use `TP_SIZE=2` and two visible GPUs.
 
 ```yaml
 services:
   ds4-lucifer-cutlass:
-    image: ${IMAGE:-voipmonitor/dsv4-flash:lucifer-mxfp4-cutlass-20260603}
+    image: ${IMAGE:-hg436/vllm-public:lucifer-9d9a0a0}
     container_name: ${CONTAINER_NAME:-ds4-lucifer-cutlass}
     network_mode: host
     gpus: all
@@ -284,26 +285,32 @@ services:
     volumes:
       - ${HOME}/.cache/luci-official:/cache
       - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+      - ${CPP_AR_SELECTOR:-/root/vllm/overlays/lucifer-cpp-ar-selector/vllm/distributed/device_communicators/custom_all_reduce.py}:/opt/vllm/vllm/distributed/device_communicators/custom_all_reduce.py:ro
     environment:
       CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1,2,3}
       NCCL_P2P_LEVEL: SYS
       NCCL_PROTO: LL,LL128,Simple
       NCCL_IB_DISABLE: "1"
+      VLLM_ENABLE_PCIE_ALLREDUCE: "1"
+      VLLM_PCIE_ALLREDUCE_BACKEND: cpp
+      VLLM_CPP_AR_1STAGE_NCCL_CUTOFF: ${VLLM_CPP_AR_1STAGE_NCCL_CUTOFF:-56KB}
+      VLLM_CPP_AR_IGNORE_CUTOFF_MAX_ROWS: ${VLLM_CPP_AR_IGNORE_CUTOFF_MAX_ROWS:-8}
       MODEL_ID: ${MODEL_ID:-deepseek-ai/DeepSeek-V4-Flash}
       SERVED_MODEL_NAME: ${SERVED_MODEL_NAME:-deepseek-v4-flash}
       PORT: ${PORT:-5610}
       TP_SIZE: ${TP_SIZE:-4}
       MTP: ${MTP:-1}
       SPECULATIVE_TOKENS: ${SPECULATIVE_TOKENS:-2}
-      DRAFT_SAMPLE_METHOD: ${DRAFT_SAMPLE_METHOD:-greedy}
-      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.86}
-      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-393216}
+      DRAFT_SAMPLE_METHOD: ${DRAFT_SAMPLE_METHOD:-probabilistic}
+      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.90}
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-262144}
       MAX_NUM_SEQS: ${MAX_NUM_SEQS:-64}
       MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-8192}
       MAX_CUDAGRAPH_CAPTURE_SIZE: ${MAX_CUDAGRAPH_CAPTURE_SIZE:-}
     entrypoint: ["/bin/bash", "-lc"]
     command: |
       set -euo pipefail
+      unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE
       GRAPH_CAP="$${MAX_CUDAGRAPH_CAPTURE_SIZE:-}"
       if [ -z "$${GRAPH_CAP}" ]; then
         if [ "$${MTP:-1}" = "1" ]; then GRAPH_CAP=192; else GRAPH_CAP=64; fi
@@ -434,72 +441,105 @@ Result JSONs:
 
 ## Lucifer Cutlass Speed
 
-Lucifer speed result root:
+Current recommended Lucifer speed run:
 
 ```text
-/root/bench-results/ds4-lucifer-cutlass-20260609/speed-sweep-v2/
-/root/bench-results/ds4-lucifer-cutlass-20260609/speed-sweep-probabilistic/
+/root/bench-results/ds4-hg436-lucifer-9d9a0a0-20260609/cpp56-serial-speed-probabilistic/
 ```
 
-Lucifer aggregate decode tok/s:
+Method:
+
+- Image `hg436/vllm-public:lucifer-9d9a0a0`.
+- Serial run only: TP2 used GPUs `0,1`; TP4 used GPUs `0,1,2,3`; all other GPUs were idle.
+- Forced C++ PCIe all-reduce selector: `VLLM_ENABLE_PCIE_ALLREDUCE=1`, `VLLM_PCIE_ALLREDUCE_BACKEND=cpp`, `VLLM_CPP_AR_1STAGE_NCCL_CUTOFF=56KB`, `VLLM_CPP_AR_IGNORE_CUTOFF_MAX_ROWS=8`.
+- MTP runs use `--speculative-config.draft_sample_method probabilistic`.
+- Decode uses `contexts=0`, `concurrency=1,2,4,8,16,32,64`, `duration=30`, `max_tokens=8192`.
+- Runtime uses `max_num_seqs=64`, `max_num_batched_tokens=8192`, `max_model_len=262144`, graph cap `64` for no-MTP and `192` for MTP.
+
+Startup logs confirm the cpp selector cutoff. With `56KB`, no-MTP decode routes
+rows `1,2,4,8` through custom all-reduce and MTP routes rows `3,6` through
+custom all-reduce; larger rows fall back to NCCL.
+
+Current Lucifer aggregate decode tok/s:
 
 | TP | MTP | Draft sampling | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|
-| TP2 | off | none | 124.4 | 207.8 | 352.0 | 570.8 | 856.9 | 1,267.4 | 1,940.9 |
-| TP2 | on | greedy/default | 200.9 | 337.2 | 381.8 | 763.6 | 1,128.7 | 1,749.8 | 2,660.3 |
-| TP2 | on | probabilistic | 207.7 | 354.7 | 410.1 | 808.1 | 1,192.0 | 1,871.2 | 2,823.6 |
-| TP4 | off | none | 137.8 | 243.7 | 436.2 | 751.2 | 1,176.8 | 1,790.0 | 2,686.2 |
-| TP4 | on | greedy/default | 237.0 | 412.8 | 562.3 | 1,076.0 | 1,606.3 | 2,508.5 | 3,670.9 |
-| TP4 | on | probabilistic | 242.1 | 434.3 | 579.1 | 1,140.7 | 1,689.4 | 2,662.8 | 3,912.9 |
+| TP2 | off | none | 123.8 | 205.1 | 350.2 | 565.5 | 827.3 | 1,237.7 | 1,924.2 |
+| TP2 | on | probabilistic | 207.1 | 346.4 | 400.4 | 787.1 | 1,153.1 | 1,796.3 | 2,752.5 |
+| TP4 | off | none | 146.8 | 260.4 | 452.6 | 745.7 | 1,178.8 | 1,809.8 | 2,739.4 |
+| TP4 | on | probabilistic | 257.2 | 439.8 | 583.4 | 1,129.2 | 1,707.6 | 2,686.7 | 3,932.4 |
 
-Lucifer prefill:
+Current Lucifer prefill:
 
-MTP and draft sampling do not change the prefill path; the table keeps one
-representative row per TP.
+MTP and draft sampling should not materially change the prefill path, but both
+launch modes were measured in the same serial run.
 
-| TP | 8k tok/s | 64k tok/s | 128k tok/s |
-|---|---:|---:|---:|
-| TP2 | 13,508 | 12,788 | 11,705 |
-| TP4 | 15,919 | 14,906 | 13,575 |
-
-Lucifer probabilistic MTP vs greedy/default decode ratio:
-
-| TP | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| TP2 | 1.03x | 1.05x | 1.07x | 1.06x | 1.06x | 1.07x | 1.06x |
-| TP4 | 1.02x | 1.05x | 1.03x | 1.06x | 1.05x | 1.06x | 1.07x |
-
-Lucifer startup logs show FlashInfer autotune warnings for some MTP shapes
-outside the tuned MoE bucket range; those warnings did not prevent completion,
-but they are relevant when interpreting possible single-cell speed cliffs.
+| TP | MTP | 8k tok/s | 64k tok/s | 128k tok/s |
+|---|---|---:|---:|---:|
+| TP2 | off | 13,409 | 12,712 | 11,670 |
+| TP2 | on | 12,956 | 12,348 | 11,318 |
+| TP4 | off | 15,593 | 14,770 | 13,475 |
+| TP4 | on | 15,054 | 14,329 | 13,142 |
 
 ## Speed Comparison
 
 Decode speedup is Lucifer/B12X. Values above `1.00x` mean Lucifer is faster.
+The Lucifer side is the current recommended cpp56/probabilistic run above.
 
 | TP | MTP | Lucifer draft sampling | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|
-| TP2 | off | none | 0.94x | 0.94x | 0.98x | 1.05x | 1.10x | 1.16x | 1.31x |
-| TP2 | on | greedy/default | 0.90x | 0.95x | 0.73x | 1.03x | 1.12x | 1.28x | 1.49x |
-| TP2 | on | probabilistic | 0.93x | 1.00x | 0.79x | 1.09x | 1.18x | 1.37x | 1.58x |
-| TP4 | off | none | 0.87x | 0.87x | 0.92x | 0.99x | 1.04x | 1.08x | 1.17x |
-| TP4 | on | greedy/default | 0.83x | 0.88x | 0.78x | 1.00x | 1.07x | 1.26x | 1.44x |
-| TP4 | on | probabilistic | 0.85x | 0.92x | 0.80x | 1.07x | 1.12x | 1.33x | 1.54x |
+| TP2 | off | none | 0.94x | 0.93x | 0.97x | 1.04x | 1.06x | 1.13x | 1.29x |
+| TP2 | on | probabilistic | 0.93x | 0.97x | 0.77x | 1.07x | 1.15x | 1.31x | 1.54x |
+| TP4 | off | none | 0.92x | 0.93x | 0.96x | 0.98x | 1.04x | 1.09x | 1.19x |
+| TP4 | on | probabilistic | 0.90x | 0.93x | 0.81x | 1.05x | 1.14x | 1.35x | 1.55x |
 
 Prefill speedup is available only for MTP-on, because B12X no-MTP prefill was
 not remeasured in the comparable 2026-06-09 rerun.
 
 | TP | MTP | Lucifer draft sampling | 8k | 64k | 128k |
 |---|---|---|---:|---:|---:|
-| TP2 | on | greedy/default | 1.91x | 1.88x | 1.86x |
-| TP2 | on | probabilistic | 1.90x | 1.88x | 1.86x |
-| TP4 | on | greedy/default | 1.85x | 1.83x | 1.82x |
-| TP4 | on | probabilistic | 1.85x | 1.83x | 1.82x |
+| TP2 | on | probabilistic | 1.86x | 1.86x | 1.84x |
+| TP4 | on | probabilistic | 1.83x | 1.84x | 1.83x |
 
 Interpretation: B12X remains faster for low-concurrency decode cells, but
-Lucifer becomes faster at higher concurrency. Lucifer probabilistic MTP is
-about 2-7% faster than Lucifer greedy/default MTP in this decode sweep.
-Lucifer prefill is roughly 1.8-1.9x faster than the B12X MTP-on rerun.
+Lucifer becomes faster at higher concurrency. Current Lucifer prefill is
+roughly 1.8x faster than the B12X MTP-on rerun.
+
+## Historical Lucifer Speed
+
+These rows are kept for regression/debugging only. They were measured before
+the current forced cpp56 PCIe all-reduce recipe, or with non-recommended greedy
+MTP sampling.
+
+Historical result roots:
+
+```text
+/root/bench-results/ds4-lucifer-cutlass-20260609/speed-sweep-v2/
+/root/bench-results/ds4-lucifer-cutlass-20260609/speed-sweep-probabilistic/
+```
+
+Historical Lucifer decode without forced cpp56 PCIe all-reduce:
+
+| TP | MTP | Draft sampling | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| TP2 | off | none | 124.4 | 207.8 | 352.0 | 570.8 | 856.9 | 1,267.4 | 1,940.9 |
+| TP2 | on | probabilistic | 207.7 | 354.7 | 410.1 | 808.1 | 1,192.0 | 1,871.2 | 2,823.6 |
+| TP4 | off | none | 137.8 | 243.7 | 436.2 | 751.2 | 1,176.8 | 1,790.0 | 2,686.2 |
+| TP4 | on | probabilistic | 242.1 | 434.3 | 579.1 | 1,140.7 | 1,689.4 | 2,662.8 | 3,912.9 |
+
+Historical greedy/default MTP decode:
+
+| TP | MTP | Draft sampling | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| TP2 | on | greedy/default | 200.9 | 337.2 | 381.8 | 763.6 | 1,128.7 | 1,749.8 | 2,660.3 |
+| TP4 | on | greedy/default | 237.0 | 412.8 | 562.3 | 1,076.0 | 1,606.3 | 2,508.5 | 3,670.9 |
+
+Historical prefill without forced cpp56 PCIe all-reduce:
+
+| TP | 8k tok/s | 64k tok/s | 128k tok/s |
+|---|---:|---:|---:|
+| TP2 | 13,508 | 12,788 | 11,705 |
+| TP4 | 15,919 | 14,906 | 13,575 |
 
 ## KLD vs H200
 
