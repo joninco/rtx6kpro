@@ -454,14 +454,13 @@ Lucifer aggregate decode tok/s:
 
 Lucifer prefill:
 
-| TP | MTP | Draft sampling | 8k tok/s | 64k tok/s | 128k tok/s |
-|---|---|---|---:|---:|---:|
-| TP2 | off | none | 13,508 | 12,788 | 11,705 |
-| TP2 | on | greedy/default | 13,315 | 12,483 | 11,457 |
-| TP2 | on | probabilistic | 13,291 | 12,478 | 11,464 |
-| TP4 | off | none | 15,919 | 14,906 | 13,575 |
-| TP4 | on | greedy/default | 15,219 | 14,279 | 13,069 |
-| TP4 | on | probabilistic | 15,215 | 14,282 | 13,071 |
+MTP and draft sampling do not change the prefill path; the table keeps one
+representative row per TP.
+
+| TP | 8k tok/s | 64k tok/s | 128k tok/s |
+|---|---:|---:|---:|
+| TP2 | 13,508 | 12,788 | 11,705 |
+| TP4 | 15,919 | 14,906 | 13,575 |
 
 Lucifer probabilistic MTP vs greedy/default decode ratio:
 
