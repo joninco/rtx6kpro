@@ -1,51 +1,79 @@
-# DeepSeek-V4-Flash v3 Standard Lucifer Image
+# DeepSeek-V4-Flash v3 B12X vs Standard Lucifer Cutlass
 
-Updated on 2026-06-09. This page supersedes the Lucifer/Cutlass parts of
-`ds4-flash-v2.md`: the recommended Lucifer image is now built by our standard
-`blackwell-llm-docker` recipe, not by the external/procr Dockerfile. The runtime
-backend is still the Lucifer FlashInfer/CUTLASS path:
+Updated on 2026-06-09. This page is the v3 replacement for
+`ds4-flash-v2.md`: it keeps the B12X comparison and measurements from v2,
+but replaces the old external Lucifer/Cutlass Docker image with our standard
+`blackwell-llm-docker` Lucifer image.
+
+The Lucifer runtime backend is still the FlashInfer/CUTLASS path:
 
 ```text
 --attention-backend SPARSE_MLA_SM120
 --kernel-config.moe_backend flashinfer_cutlass
 ```
 
-This is not the B12X MoE backend. B12X is still used only as the comparison
-variant below.
+This is not the B12X MoE backend. The B12X variant remains documented
+separately as the comparison baseline.
 
-## Recommended Image
+## Compared Variants
+
+| Variant | Image | Backend summary |
+|---|---|---|
+| B12X | `voipmonitor/vllm:black-benediction-bb6c5b7-b12xd90d89c-cu132` | `B12X_MLA_SPARSE`, `--moe-backend=b12x`, `--linear-backend=b12x` |
+| Standard Lucifer Cutlass | `voipmonitor/vllm:lucifer` | `SPARSE_MLA_SM120`, `flashinfer_cutlass` MoE |
+
+B12X pinned digest:
+
+```text
+voipmonitor/vllm@sha256:ce23a9b075bd7138ce3b12ee29609b98606e5050e2def4a29bbb917ad96e5997
+```
+
+Standard Lucifer pinned digest:
 
 ```text
 voipmonitor/vllm:lucifer
 voipmonitor/vllm:lucifer-vllm7c6bbf4-fi3395b41aa8d-dg324aced12c-tk9801a7-cu132-20260609
-```
-
-Pinned digest:
-
-```text
 voipmonitor/vllm@sha256:76f5f2cb4942d5b175908192ac07be81df077fe28cd5d3f8c7c92611895e14d4
 ```
 
-Source state:
+Relevant B12X source state:
 
 | Component | Revision |
 |---|---|
-| Docker recipe repo | `local-inference-lab/blackwell-llm-docker` |
-| Docker recipe commit | `7e54b18` |
-| vLLM branch | `local-inference-lab/vllm:lucifer` |
-| vLLM commit | `7c6bbf4c5a482e100af886c5b6eb4303746cc3ba` |
 | CUDA | `13.2.1` |
 | cuBLAS package | `13.4.1.2-1` |
 | cuDNN package | `9.22.0.52-1` |
-| NCCL runtime | `2.30.4`, `local-inference-lab/nccl-canonical` |
+| NCCL runtime | `2.30.4`, [local-inference-lab/nccl-canonical](https://github.com/local-inference-lab/nccl-canonical) |
 | PyTorch | `2.12.0+cu132` |
-| FlashInfer branch | `refs/pull/3395/head` |
-| FlashInfer commit | `b41aa8dd2fb93c49b1c6134bd1953040f8089d51` |
-| DeepGEMM branch | `refs/pull/324/head` |
-| DeepGEMM commit | `aced12c2c8882a945c568ace9d4a7e5778aae410` |
-| B12X package | PR11 `d90d89c8353adabb56cc84bd3924ef811ef8d877`, installed but not used for Lucifer MoE |
-| CUTLASS commit | `d80a4e53b52b42550659a8696dab32705265e324` |
-| Triton kernels commit | `9801a7afbaea43a085db2016eadddd631555ae13` |
+| vLLM branch | [local-inference-lab/vllm/tree/dev/black-benediction](https://github.com/local-inference-lab/vllm/tree/dev/black-benediction) |
+| vLLM commit | [bb6c5b7351fceb9d524e0d43b957415ffefcb981](https://github.com/local-inference-lab/vllm/commit/bb6c5b7351fceb9d524e0d43b957415ffefcb981) |
+| B12X ref | [lukealonso/b12x/pull/11](https://github.com/lukealonso/b12x/pull/11) |
+| B12X commit | [d90d89c8353adabb56cc84bd3924ef811ef8d877](https://github.com/lukealonso/b12x/commit/d90d89c8353adabb56cc84bd3924ef811ef8d877) |
+| FlashInfer ref | [flashinfer-ai/flashinfer/pull/3395](https://github.com/flashinfer-ai/flashinfer/pull/3395) |
+| FlashInfer commit | [b41aa8dd2fb93c49b1c6134bd1953040f8089d51](https://github.com/flashinfer-ai/flashinfer/commit/b41aa8dd2fb93c49b1c6134bd1953040f8089d51) |
+| DeepGEMM ref | [deepseek-ai/DeepGEMM/pull/324](https://github.com/deepseek-ai/DeepGEMM/pull/324) |
+| DeepGEMM commit | [aced12c2c8882a945c568ace9d4a7e5778aae410](https://github.com/deepseek-ai/DeepGEMM/commit/aced12c2c8882a945c568ace9d4a7e5778aae410) |
+
+Relevant Standard Lucifer source state:
+
+| Component | Revision |
+|---|---|
+| Docker recipe repo | [local-inference-lab/blackwell-llm-docker](https://github.com/local-inference-lab/blackwell-llm-docker) |
+| Docker recipe commit | [7e54b18](https://github.com/local-inference-lab/blackwell-llm-docker/commit/7e54b18) |
+| vLLM branch | [local-inference-lab/vllm/tree/lucifer](https://github.com/local-inference-lab/vllm/tree/lucifer) |
+| vLLM commit | [7c6bbf4c5a482e100af886c5b6eb4303746cc3ba](https://github.com/local-inference-lab/vllm/commit/7c6bbf4c5a482e100af886c5b6eb4303746cc3ba) |
+| CUDA | `13.2.1` |
+| cuBLAS package | `13.4.1.2-1` |
+| cuDNN package | `9.22.0.52-1` |
+| NCCL runtime | `2.30.4`, [local-inference-lab/nccl-canonical](https://github.com/local-inference-lab/nccl-canonical) |
+| PyTorch | `2.12.0+cu132` |
+| FlashInfer ref | [flashinfer-ai/flashinfer/pull/3395](https://github.com/flashinfer-ai/flashinfer/pull/3395) |
+| FlashInfer commit | [b41aa8dd2fb93c49b1c6134bd1953040f8089d51](https://github.com/flashinfer-ai/flashinfer/commit/b41aa8dd2fb93c49b1c6134bd1953040f8089d51) |
+| DeepGEMM ref | [deepseek-ai/DeepGEMM/pull/324](https://github.com/deepseek-ai/DeepGEMM/pull/324) |
+| DeepGEMM commit | [aced12c2c8882a945c568ace9d4a7e5778aae410](https://github.com/deepseek-ai/DeepGEMM/commit/aced12c2c8882a945c568ace9d4a7e5778aae410) |
+| B12X package | [d90d89c8353adabb56cc84bd3924ef811ef8d877](https://github.com/lukealonso/b12x/commit/d90d89c8353adabb56cc84bd3924ef811ef8d877), installed but not used for Lucifer MoE |
+| CUTLASS commit | [d80a4e53b52b42550659a8696dab32705265e324](https://github.com/NVIDIA/cutlass/commit/d80a4e53b52b42550659a8696dab32705265e324) |
+| Triton kernels commit | [9801a7afbaea43a085db2016eadddd631555ae13](https://github.com/triton-lang/triton/commit/9801a7afbaea43a085db2016eadddd631555ae13) |
 
 Sanity check from the built image:
 
@@ -64,7 +92,7 @@ recipe and Lucifer branch contain no `NCCL_GRAPH_FILE` default. Runtime launch
 commands below still explicitly unset graph/all-reduce override variables before
 `exec vllm serve` so inherited image or shell env cannot leak in.
 
-## Build
+## Standard Lucifer Build
 
 Exact rebuild:
 
@@ -85,12 +113,23 @@ docker push voipmonitor/vllm:lucifer-vllm7c6bbf4-fi3395b41aa8d-dg324aced12c-tk98
 docker push voipmonitor/vllm:lucifer
 ```
 
-The build helper pins FlashInfer PR3395, DeepGEMM PR324, B12X PR11, the Lucifer
-vLLM branch, CUTLASS, and the legacy Triton kernels source hook required by the
-Lucifer code path. It uses the same CUDA 13.2 base and patched NCCL stack as the
-B12X images.
+The build helper pins FlashInfer, DeepGEMM, B12X, the Lucifer vLLM branch,
+CUTLASS, and the legacy Triton kernels source hook required by the Lucifer code
+path. It uses the same CUDA 13.2 base and patched NCCL stack as the B12X images.
 
 ## Model
+
+B12X local snapshot used for the v2/v3 measurements:
+
+```text
+/root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash/snapshots/6976c7ff1b30a1b2cb7805021b8ba4684041f136
+```
+
+Lucifer validation snapshot resolved by the server:
+
+```text
+/root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash/snapshots/553034d7dd9e06c2eeaee68cf85a17d6d4754cf0
+```
 
 Model ID:
 
@@ -98,20 +137,159 @@ Model ID:
 deepseek-ai/DeepSeek-V4-Flash
 ```
 
-Served model name used by the new Lucifer compose:
+Served model names used across the measurements:
 
 ```text
 DeepSeek-V4-Flash
+deepseek-v4-flash
 ```
 
-The current local TP2 validation used the Hugging Face snapshot resolved by the
-server:
+## Launch Notes
 
-```text
-/root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash/snapshots/553034d7dd9e06c2eeaee68cf85a17d6d4754cf0
+B12X important defaults:
+
+| Setting | Value |
+|---|---|
+| MTP tokens | `2` |
+| MTP draft sampling | `probabilistic`; greedy measured separately |
+| MTP local argmax reduction | `true` |
+| Max num seqs | `64` |
+| Max batched tokens | `4096` for original speed matrix, `8192` for 2026-06-09 reruns |
+| CUDA graph cap | `64` no-MTP, `192` MTP |
+| Max model len | `130000` original speed matrix, `262144` profile/prefill/greedy reruns |
+| KV cache dtype | `fp8` |
+| GPU memory utilization | `0.875` speed matrix, `0.88` prefill/greedy reruns, `0.90` profile farm |
+| DS4 chat kwargs for quality farm | `{"thinking": true, "reasoning_effort": "high"}` |
+
+Standard Lucifer defaults:
+
+| Setting | Value |
+|---|---|
+| MTP tokens | `2` |
+| MTP draft sampling | `probabilistic` |
+| Max num seqs | `64` |
+| Max batched tokens | `8192` |
+| CUDA graph cap | `64` no-MTP, `192` MTP |
+| Max model len | `262144` |
+| KV cache dtype | `fp8` |
+| GPU memory utilization | `0.90` |
+| DS4 chat kwargs | `thinking=true`, `reasoning_effort=high` |
+| Runtime MoE backend | `flashinfer_cutlass` |
+
+Important: unset empty NCCL graph variables before any launch:
+
+```bash
+unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE
 ```
 
 ## Docker Compose
+
+B12X compose. Defaults are TP4, MTP on, `max_num_seqs=64`, and graph cap
+`192`. For no-MTP use `MTP=0` and `MAX_CUDAGRAPH_CAPTURE_SIZE=64`. For TP2 use
+`TP_SIZE=2` and two visible GPUs.
+
+```yaml
+services:
+  ds4-b12x:
+    image: ${IMAGE:-voipmonitor/vllm:black-benediction-bb6c5b7-b12xd90d89c-cu132}
+    container_name: ${CONTAINER_NAME:-ds4-b12x}
+    network_mode: host
+    gpus: all
+    runtime: nvidia
+    ipc: host
+    shm_size: 32g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    volumes:
+      - /mnt:/mnt
+      - /cache:/cache
+      - /root/.cache/huggingface:/root/.cache/huggingface
+      - /root/bench-results:/root/bench-results
+      - /root/vllm/artifacts:/root/vllm/artifacts
+    environment:
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1,2,3}
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUTE_DSL_ARCH: sm_120a
+      NCCL_IB_DISABLE: "1"
+      NCCL_P2P_LEVEL: SYS
+      NCCL_PROTO: LL,LL128,Simple
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+      VLLM_USE_AOT_COMPILE: "1"
+      VLLM_USE_BREAKABLE_CUDAGRAPH: "0"
+      VLLM_USE_MEGA_AOT_ARTIFACT: "1"
+      VLLM_MEMORY_PROFILE_INCLUDE_ATTN: "1"
+      B12X_MHC_MAX_TOKENS: "16384"
+      VLLM_USE_FLASHINFER_SAMPLER: "1"
+      VLLM_USE_B12X_WO_PROJECTION: "1"
+      VLLM_USE_B12X_MHC: "1"
+      VLLM_USE_B12X_FP8_GEMM: "1"
+      VLLM_USE_B12X_MOE: "1"
+      VLLM_USE_B12X_SPARSE_INDEXER: "1"
+      VLLM_USE_V2_MODEL_RUNNER: "1"
+      VLLM_PCIE_ALLREDUCE_BACKEND: b12x
+      VLLM_ENABLE_PCIE_ALLREDUCE: "1"
+      B12X_MLA_SM120_UNIFIED: "1"
+      USES_B12X: "True"
+      B12X_DENSE_SPLITK_TURBO: "1"
+      B12X_W4A16_TC_DECODE: "1"
+      MODEL_PATH: ${MODEL_PATH:-/root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash/snapshots/6976c7ff1b30a1b2cb7805021b8ba4684041f136}
+      SERVED_MODEL_NAME: ${SERVED_MODEL_NAME:-DeepSeek-V4-Flash}
+      PORT: ${PORT:-5329}
+      TP_SIZE: ${TP_SIZE:-4}
+      MTP: ${MTP:-1}
+      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.875}
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-130000}
+      MAX_NUM_SEQS: ${MAX_NUM_SEQS:-64}
+      MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-4096}
+      LOAD_FORMAT: ${LOAD_FORMAT:-safetensors}
+      MAX_CUDAGRAPH_CAPTURE_SIZE: ${MAX_CUDAGRAPH_CAPTURE_SIZE:-}
+      DS4_SPEC_CONFIG_JSON: '{"method":"mtp","num_speculative_tokens":2,"draft_sample_method":"probabilistic","moe_backend":"b12x","use_local_argmax_reduction":true}'
+    entrypoint: ["/bin/bash", "-lc"]
+    command: |
+      set -euo pipefail
+      unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
+      GRAPH_CAP="$${MAX_CUDAGRAPH_CAPTURE_SIZE:-}"
+      if [ -z "$${GRAPH_CAP}" ]; then
+        if [ "$${MTP:-1}" = "1" ]; then GRAPH_CAP=192; else GRAPH_CAP=64; fi
+      fi
+      SPEC_ARGS=()
+      if [ "$${MTP:-1}" = "1" ]; then
+        SPEC_ARGS=(--speculative-config "$${DS4_SPEC_CONFIG_JSON}")
+      fi
+      cd /
+      exec /opt/venv/bin/python -m vllm.entrypoints.cli.main serve "$${MODEL_PATH}" \
+        --served-model-name "$${SERVED_MODEL_NAME}" \
+        --host 0.0.0.0 \
+        --port "$${PORT}" \
+        --kv-cache-dtype fp8 \
+        --block-size 256 \
+        --load-format "$${LOAD_FORMAT}" \
+        --tensor-parallel-size "$${TP_SIZE}" \
+        --moe-backend b12x \
+        --linear-backend b12x \
+        --gpu-memory-utilization "$${GPU_MEMORY_UTILIZATION}" \
+        --max-model-len "$${MAX_MODEL_LEN}" \
+        --max-num-seqs "$${MAX_NUM_SEQS}" \
+        --async-scheduling \
+        --no-scheduler-reserve-full-isl \
+        --max-num-batched-tokens "$${MAX_NUM_BATCHED_TOKENS}" \
+        --max-cudagraph-capture-size "$${GRAPH_CAP}" \
+        --attention-backend B12X_MLA_SPARSE \
+        --enable-chunked-prefill \
+        --enable-prefix-caching \
+        --compilation-config '{"cudagraph_mode":"FULL_AND_PIECEWISE","custom_ops":["all"]}' \
+        --tokenizer-mode deepseek_v4 \
+        --tool-call-parser deepseek_v4 \
+        --enable-auto-tool-choice \
+        --reasoning-parser deepseek_v4 \
+        --enable-flashinfer-autotune \
+        "$${SPEC_ARGS[@]}"
+```
+
+Standard Lucifer Cutlass compose. Defaults are TP4, MTP on, probabilistic draft
+sampling, `flashinfer_cutlass` MoE, graph cap `192`, and the last four GPUs on
+the local 16-GPU host.
 
 Default GPU scope follows the current host convention: use the last four GPUs.
 TP4 defaults to `12,13,14,15`; for TP2 set
@@ -297,8 +475,7 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
   --output /root/bench-results/ds4-lucifer-clean-20260609/tp2_mtp_prob_decode_ctx0_30s_warm.json
 ```
 
-Comparison against the previous `hg436/vllm-public:lucifer-9d9a0a0` TP2 MTP
-probabilistic run from v2:
+Comparison against the previous v2 Lucifer TP2 MTP probabilistic run:
 
 | C | New standard image tok/s | Previous Lucifer tok/s | Delta |
 |---:|---:|---:|---:|
@@ -334,12 +511,9 @@ Profile speed and latency:
 | lavd-test | 84.0 | 129.2 | 1.54x | 226.8s | 141.7s | 0.62x |
 | hotel-lights | 46.2 | 93.1 | 2.02x | 448.4s | 221.6s | 0.49x |
 
-Result roots:
-
-```text
-/root/bench-results/ds4-black-pr11-20260609/profile-30x-thinking-high/
-/root/bench-results/ds4-lucifer-cutlass-20260609/profile-30x-thinking-high/
-```
+Exact local result roots are archived in the v2 page; v3 keeps the summarized
+profile statistics and uses the new standard Lucifer image as the documented
+runtime target.
 
 ## Decode Speed
 
