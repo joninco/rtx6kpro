@@ -131,8 +131,15 @@ docker run --rm --name ds4-lucifer-speed \
   --reasoning-parser deepseek_v4 \
   --default-chat-template-kwargs '{"thinking": true, "reasoning_effort": "high"}' \
   --speculative-config.method mtp \
-  --speculative-config.num_speculative_tokens 2
+  --speculative-config.num_speculative_tokens 2 \
+  --speculative-config.draft_sample_method greedy
 ```
+
+Lucifer MTP measurements used the default vLLM draft sampling behavior. The
+launch logs show only `{'method': 'mtp', 'num_speculative_tokens': 2}` in
+`speculative_config`; in this vLLM branch the default `draft_sample_method` is
+`greedy`. The compose below sets it explicitly to keep the recipe
+reproducible.
 
 Lucifer TP2 MTP speed sweep used `--max-model-len 245760`, because
 `393216` did not fit with MTP graph capture at `gpu_memory_utilization=0.88`.
@@ -143,6 +150,189 @@ Important: unset empty NCCL graph variables before any B12X `vllm serve`:
 
 ```bash
 unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
+```
+
+## Docker Compose
+
+B12X PR11 compose. Defaults are TP4, MTP on, `max_num_seqs=64`, and graph cap
+`192`. For no-MTP use `MTP=0` and `MAX_CUDAGRAPH_CAPTURE_SIZE=64`. For TP2 use
+`TP_SIZE=2` and two visible GPUs.
+
+```yaml
+services:
+  ds4-b12x:
+    image: ${IMAGE:-voipmonitor/vllm:black-benediction-bb6c5b7-b12xd90d89c-cu132}
+    container_name: ${CONTAINER_NAME:-ds4-b12x}
+    network_mode: host
+    gpus: all
+    runtime: nvidia
+    ipc: host
+    shm_size: 32g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    volumes:
+      - /mnt:/mnt
+      - /cache:/cache
+      - /root/.cache/huggingface:/root/.cache/huggingface
+      - /root/bench-results:/root/bench-results
+      - /root/vllm/artifacts:/root/vllm/artifacts
+    environment:
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1,2,3}
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUTE_DSL_ARCH: sm_120a
+      NCCL_IB_DISABLE: "1"
+      NCCL_P2P_LEVEL: SYS
+      NCCL_PROTO: LL,LL128,Simple
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+      VLLM_USE_AOT_COMPILE: "1"
+      VLLM_USE_BREAKABLE_CUDAGRAPH: "0"
+      VLLM_USE_MEGA_AOT_ARTIFACT: "1"
+      VLLM_MEMORY_PROFILE_INCLUDE_ATTN: "1"
+      B12X_MHC_MAX_TOKENS: "16384"
+      VLLM_USE_FLASHINFER_SAMPLER: "1"
+      VLLM_USE_B12X_WO_PROJECTION: "1"
+      VLLM_USE_B12X_MHC: "1"
+      VLLM_USE_B12X_FP8_GEMM: "1"
+      VLLM_USE_B12X_MOE: "1"
+      VLLM_USE_B12X_SPARSE_INDEXER: "1"
+      VLLM_USE_V2_MODEL_RUNNER: "1"
+      VLLM_PCIE_ALLREDUCE_BACKEND: b12x
+      VLLM_ENABLE_PCIE_ALLREDUCE: "1"
+      B12X_MLA_SM120_UNIFIED: "1"
+      USES_B12X: "True"
+      B12X_DENSE_SPLITK_TURBO: "1"
+      B12X_W4A16_TC_DECODE: "1"
+      MODEL_PATH: ${MODEL_PATH:-/root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash/snapshots/6976c7ff1b30a1b2cb7805021b8ba4684041f136}
+      SERVED_MODEL_NAME: ${SERVED_MODEL_NAME:-DeepSeek-V4-Flash}
+      PORT: ${PORT:-5329}
+      TP_SIZE: ${TP_SIZE:-4}
+      MTP: ${MTP:-1}
+      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.875}
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-130000}
+      MAX_NUM_SEQS: ${MAX_NUM_SEQS:-64}
+      MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-4096}
+      LOAD_FORMAT: ${LOAD_FORMAT:-safetensors}
+      MAX_CUDAGRAPH_CAPTURE_SIZE: ${MAX_CUDAGRAPH_CAPTURE_SIZE:-}
+      DS4_SPEC_CONFIG_JSON: '{"method":"mtp","num_speculative_tokens":2,"draft_sample_method":"probabilistic","moe_backend":"b12x","use_local_argmax_reduction":true}'
+    entrypoint: ["/bin/bash", "-lc"]
+    command: |
+      set -euo pipefail
+      unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
+      GRAPH_CAP="$${MAX_CUDAGRAPH_CAPTURE_SIZE:-}"
+      if [ -z "$${GRAPH_CAP}" ]; then
+        if [ "$${MTP:-1}" = "1" ]; then GRAPH_CAP=192; else GRAPH_CAP=64; fi
+      fi
+      SPEC_ARGS=()
+      if [ "$${MTP:-1}" = "1" ]; then
+        SPEC_ARGS=(--speculative-config "$${DS4_SPEC_CONFIG_JSON}")
+      fi
+      cd /
+      exec /opt/venv/bin/python -m vllm.entrypoints.cli.main serve "$${MODEL_PATH}" \
+        --served-model-name "$${SERVED_MODEL_NAME}" \
+        --host 0.0.0.0 \
+        --port "$${PORT}" \
+        --kv-cache-dtype fp8 \
+        --block-size 256 \
+        --load-format "$${LOAD_FORMAT}" \
+        --tensor-parallel-size "$${TP_SIZE}" \
+        --moe-backend b12x \
+        --linear-backend b12x \
+        --gpu-memory-utilization "$${GPU_MEMORY_UTILIZATION}" \
+        --max-model-len "$${MAX_MODEL_LEN}" \
+        --max-num-seqs "$${MAX_NUM_SEQS}" \
+        --async-scheduling \
+        --no-scheduler-reserve-full-isl \
+        --max-num-batched-tokens "$${MAX_NUM_BATCHED_TOKENS}" \
+        --max-cudagraph-capture-size "$${GRAPH_CAP}" \
+        --attention-backend B12X_MLA_SPARSE \
+        --enable-chunked-prefill \
+        --enable-prefix-caching \
+        --compilation-config '{"cudagraph_mode":"FULL_AND_PIECEWISE","custom_ops":["all"]}' \
+        --tokenizer-mode deepseek_v4 \
+        --tool-call-parser deepseek_v4 \
+        --enable-auto-tool-choice \
+        --reasoning-parser deepseek_v4 \
+        --enable-flashinfer-autotune \
+        "$${SPEC_ARGS[@]}"
+```
+
+Lucifer Cutlass compose. Defaults are TP4, MTP on, `flashinfer_cutlass` MoE,
+and graph cap `192`. For no-MTP use `MTP=0` and
+`MAX_CUDAGRAPH_CAPTURE_SIZE=64`. For TP2 MTP use `TP_SIZE=2`, two visible GPUs,
+and `MAX_MODEL_LEN=245760` if `393216` does not fit.
+
+```yaml
+services:
+  ds4-lucifer-cutlass:
+    image: ${IMAGE:-voipmonitor/dsv4-flash:lucifer-mxfp4-cutlass-20260603}
+    container_name: ${CONTAINER_NAME:-ds4-lucifer-cutlass}
+    network_mode: host
+    gpus: all
+    runtime: nvidia
+    ipc: host
+    shm_size: 32g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    volumes:
+      - ${HOME}/.cache/luci-official:/cache
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+    environment:
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1,2,3}
+      NCCL_P2P_LEVEL: SYS
+      NCCL_PROTO: LL,LL128,Simple
+      NCCL_IB_DISABLE: "1"
+      MODEL_ID: ${MODEL_ID:-deepseek-ai/DeepSeek-V4-Flash}
+      SERVED_MODEL_NAME: ${SERVED_MODEL_NAME:-deepseek-v4-flash}
+      PORT: ${PORT:-5610}
+      TP_SIZE: ${TP_SIZE:-4}
+      MTP: ${MTP:-1}
+      SPECULATIVE_TOKENS: ${SPECULATIVE_TOKENS:-2}
+      DRAFT_SAMPLE_METHOD: ${DRAFT_SAMPLE_METHOD:-greedy}
+      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.86}
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-393216}
+      MAX_NUM_SEQS: ${MAX_NUM_SEQS:-64}
+      MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-8192}
+      MAX_CUDAGRAPH_CAPTURE_SIZE: ${MAX_CUDAGRAPH_CAPTURE_SIZE:-}
+    entrypoint: ["/bin/bash", "-lc"]
+    command: |
+      set -euo pipefail
+      GRAPH_CAP="$${MAX_CUDAGRAPH_CAPTURE_SIZE:-}"
+      if [ -z "$${GRAPH_CAP}" ]; then
+        if [ "$${MTP:-1}" = "1" ]; then GRAPH_CAP=192; else GRAPH_CAP=64; fi
+      fi
+      SPEC_ARGS=()
+      if [ "$${MTP:-1}" = "1" ]; then
+        SPEC_ARGS=(--speculative-config.method mtp --speculative-config.num_speculative_tokens "$${SPECULATIVE_TOKENS}" --speculative-config.draft_sample_method "$${DRAFT_SAMPLE_METHOD}")
+      fi
+      exec vllm serve "$${MODEL_ID}" \
+        --served-model-name "$${SERVED_MODEL_NAME}" \
+        --trust-remote-code \
+        --host 0.0.0.0 \
+        --port "$${PORT}" \
+        --kv-cache-dtype fp8 \
+        --block-size 256 \
+        --load-format auto \
+        --tensor-parallel-size "$${TP_SIZE}" \
+        --gpu-memory-utilization "$${GPU_MEMORY_UTILIZATION}" \
+        --max-model-len "$${MAX_MODEL_LEN}" \
+        --max-num-seqs "$${MAX_NUM_SEQS}" \
+        --max-cudagraph-capture-size "$${GRAPH_CAP}" \
+        --async-scheduling \
+        --no-scheduler-reserve-full-isl \
+        --max-num-batched-tokens "$${MAX_NUM_BATCHED_TOKENS}" \
+        --attention-backend SPARSE_MLA_SM120 \
+        --enable-chunked-prefill \
+        --enable-prefix-caching \
+        --enable-flashinfer-autotune \
+        --kernel-config.moe_backend flashinfer_cutlass \
+        --tokenizer-mode deepseek_v4 \
+        --tool-call-parser deepseek_v4 \
+        --enable-auto-tool-choice \
+        --reasoning-parser deepseek_v4 \
+        --default-chat-template-kwargs '{"thinking": true, "reasoning_effort": "high"}' \
+        "$${SPEC_ARGS[@]}"
 ```
 
 ## Profile Quality
