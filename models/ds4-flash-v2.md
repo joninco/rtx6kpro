@@ -1,33 +1,35 @@
-# DeepSeek-V4-Flash v2 Black Benediction PR11
+# DeepSeek-V4-Flash v2 B12X PR11 vs Lucifer Cutlass
 
 Measured on 2026-06-08 and 2026-06-09 on the local 16x RTX PRO 6000 Blackwell
-host. This page records the Black Benediction image with B12X PR11 for
-DeepSeek-V4-Flash TP2/TP4, MTP on/off decode speed, prefill speed, H200 KLD
-comparison, and profile quality checks.
+host. This page records the Black Benediction B12X PR11 image and compares it
+with the Lucifer Cutlass image for DeepSeek-V4-Flash quality profiles,
+prefill, and decode.
 
-Status: TP2 and TP4 start with B12X MLA sparse attention, B12X MoE/linear,
-V2 model runner, CUDA graphs, `max_num_seqs=64`, and MTP2. The PR11 B12X
-compressed MLA fix allows MTP full graph capture through 192 rows.
+Important: the Lucifer variant below is a Cutlass/FlashInfer variant. It uses
+`--attention-backend SPARSE_MLA_SM120` and
+`--kernel-config.moe_backend flashinfer_cutlass`; it is not the B12X MoE
+backend.
 
-## Image
+## Compared Variants
 
-```text
-voipmonitor/vllm:black-benediction-b12xpr11-vllmbb6c5b7-b12xd90d89c-fi3395b41aa8d-dg324aced12c-cu132-20260608
-```
+| Variant | Image | Backend summary |
+|---|---|---|
+| B12X PR11 | `voipmonitor/vllm:black-benediction-bb6c5b7-b12xd90d89c-cu132` | `B12X_MLA_SPARSE`, `--moe-backend=b12x`, `--linear-backend=b12x` |
+| Lucifer Cutlass | `voipmonitor/dsv4-flash:lucifer-mxfp4-cutlass-20260603` | `SPARSE_MLA_SM120`, `flashinfer_cutlass` MoE |
 
-Pinned digest:
+B12X pinned digest:
 
 ```text
 voipmonitor/vllm@sha256:ce23a9b075bd7138ce3b12ee29609b98606e5050e2def4a29bbb917ad96e5997
 ```
 
-Local image ID:
+Lucifer pinned digest:
 
 ```text
-sha256:da1c3e883628cf4f5fcd507e8e906851f744820259393d4d1b4e13919e37f326
+voipmonitor/dsv4-flash@sha256:71341a1a3fe8cba8283b2289d49c03023008b90426af51d86cba958e0684d385
 ```
 
-Relevant source state:
+Relevant B12X source state:
 
 | Component | Revision |
 |---|---|
@@ -47,55 +49,22 @@ Relevant source state:
 
 ## Model
 
-Local snapshot used for these measurements:
+Local snapshot used for the B12X measurements:
 
 ```text
 /root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash/snapshots/6976c7ff1b30a1b2cb7805021b8ba4684041f136
 ```
 
-Served model name:
+Served model names:
 
 ```text
 DeepSeek-V4-Flash
+deepseek-v4-flash
 ```
 
-## Runtime Profile
+## Launch Notes
 
-Local helpers used for the measurements:
-
-```text
-/root/run-ds4-flash-black-pr11
-/root/vllm/tmp/run_ds4_pr11_server.sh
-```
-
-Important defaults:
-
-| Setting | Value |
-|---|---|
-| GPUs | set by `CUDA_VISIBLE_DEVICES_VALUE` |
-| Tensor parallel | `TP_SIZE=2` or `TP_SIZE=4` |
-| MTP | set by `MTP=0|1` |
-| MTP tokens | `2` |
-| MTP draft sampling | `probabilistic`; greedy measured separately |
-| MTP local argmax reduction | `true` |
-| Max num seqs | `64` |
-| Max batched tokens | `4096` for the original speed matrix, `8192` for the 2026-06-09 reruns |
-| CUDA graph cap | `64` no-MTP, `192` MTP |
-| Max model len | `130000` for the original speed matrix, `262144` for profile/prefill/greedy reruns |
-| KV cache dtype | `fp8` |
-| Attention backend | `B12X_MLA_SPARSE` |
-| MoE backend | `b12x` |
-| Linear backend | `b12x` |
-| GPU memory utilization | `0.875` speed matrix, `0.88` prefill/greedy reruns, `0.90` profile farm |
-| DS4 chat kwargs for quality rerun | `{"thinking": true, "reasoning_effort": "high"}` |
-
-Important: unset empty NCCL graph variables before `vllm serve`:
-
-```bash
-unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
-```
-
-Example launches:
+B12X helper:
 
 ```bash
 # TP4 with MTP2.
@@ -108,42 +77,120 @@ CUDA_VISIBLE_DEVICES_VALUE=0,1,2,3 TP_SIZE=4 MTP=0 PORT=5329 /root/run-ds4-flash
 CUDA_VISIBLE_DEVICES_VALUE=0,1 TP_SIZE=2 MTP=1 PORT=5329 /root/run-ds4-flash-black-pr11
 ```
 
-MTP config used by the helper:
+B12X important defaults:
 
-```json
-{
-  "method": "mtp",
-  "num_speculative_tokens": 2,
-  "draft_sample_method": "probabilistic",
-  "moe_backend": "b12x",
-  "use_local_argmax_reduction": true
-}
-```
+| Setting | Value |
+|---|---|
+| MTP tokens | `2` |
+| MTP draft sampling | `probabilistic`; greedy measured separately |
+| MTP local argmax reduction | `true` |
+| Max num seqs | `64` |
+| Max batched tokens | `4096` for original speed matrix, `8192` for 2026-06-09 reruns |
+| CUDA graph cap | `64` no-MTP, `192` MTP |
+| Max model len | `130000` original speed matrix, `262144` profile/prefill/greedy reruns |
+| KV cache dtype | `fp8` |
+| GPU memory utilization | `0.875` speed matrix, `0.88` prefill/greedy reruns, `0.90` profile farm |
+| DS4 chat kwargs for quality farm | `{"thinking": true, "reasoning_effort": "high"}` |
 
-For the greedy rerun only `draft_sample_method` changed to `greedy`; local
-argmax reduction stayed enabled and the smoke test remained coherent.
-
-Readiness check:
+Lucifer speed sweep launch shape:
 
 ```bash
-curl -fsS http://127.0.0.1:5329/v1/models
-docker logs ds4-flash-black-pr11 2>&1 | grep -E 'GPU KV cache size|Maximum concurrency|Graph capturing finished|Application startup complete' | tail -20
+docker run --rm --name ds4-lucifer-speed \
+  --gpus all --runtime nvidia --ipc host --shm-size 32g --network host \
+  --ulimit memlock=-1 --ulimit stack=67108864 \
+  -v ~/.cache/luci-official:/cache \
+  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  -e CUDA_VISIBLE_DEVICES=0,1,2,3 \
+  -e NCCL_P2P_LEVEL=SYS \
+  -e NCCL_PROTO=LL,LL128,Simple \
+  -e NCCL_IB_DISABLE=1 \
+  voipmonitor/dsv4-flash:lucifer-mxfp4-cutlass-20260603 serve deepseek-ai/DeepSeek-V4-Flash \
+  --served-model-name deepseek-v4-flash \
+  --trust-remote-code \
+  --host 0.0.0.0 \
+  --port 5610 \
+  --kv-cache-dtype fp8 \
+  --block-size 256 \
+  --load-format auto \
+  --tensor-parallel-size 4 \
+  --gpu-memory-utilization 0.86 \
+  --max-model-len 393216 \
+  --max-num-seqs 64 \
+  --max-cudagraph-capture-size 192 \
+  --async-scheduling \
+  --no-scheduler-reserve-full-isl \
+  --max-num-batched-tokens 8192 \
+  --attention-backend SPARSE_MLA_SM120 \
+  --enable-chunked-prefill \
+  --enable-prefix-caching \
+  --enable-flashinfer-autotune \
+  --kernel-config.moe_backend flashinfer_cutlass \
+  --tokenizer-mode deepseek_v4 \
+  --tool-call-parser deepseek_v4 \
+  --enable-auto-tool-choice \
+  --reasoning-parser deepseek_v4 \
+  --default-chat-template-kwargs '{"thinking": true, "reasoning_effort": "high"}' \
+  --speculative-config.method mtp \
+  --speculative-config.num_speculative_tokens 2
 ```
 
-## Correctness Smoke
+Lucifer TP2 MTP speed sweep used `--max-model-len 245760`, because
+`393216` did not fit with MTP graph capture at `gpu_memory_utilization=0.88`.
+The measured prefill contexts still include 128k, so this does not affect the
+headline prefill/decode cells below.
 
-All speed-matrix and greedy services passed the local smoke test with coherent
-output and `chinese_count=0` before decode measurement:
+Important: unset empty NCCL graph variables before any B12X `vllm serve`:
+
+```bash
+unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
+```
+
+## Profile Quality
+
+Both farms used 30 full invocations per profile, not 30 total samples. B12X ran
+eight TP2+MTP2 replicas on ports `5500-5507`. Lucifer ran four TP4+MTP2
+Cutlass replicas on ports `5600-5603`. All profile runs used
+`thinking=true` and `reasoning_effort=high`.
+
+Result roots:
 
 ```text
-/root/bench-results/ds4-black-pr11-20260608/smoke/
-/root/bench-results/ds4-black-pr11-20260609/greedy-tp2-smoke.txt
-/root/bench-results/ds4-black-pr11-20260609/greedy-tp4-smoke.txt
+/root/bench-results/ds4-black-pr11-20260609/profile-30x-thinking-high/
+/root/bench-results/ds4-lucifer-cutlass-20260609/profile-30x-thinking-high/
 ```
 
-## Decode Speed
+Quality summary:
 
-Benchmark:
+| Profile | Samples | B12X score | B12X success | Lucifer score | Lucifer success | Delta |
+|---|---:|---|---:|---|---:|---:|
+| estonia | 900 / 900 | PASS 879 / FAIL 21 | 97.7% | PASS 878 / FAIL 22 | 97.6% | -0.1 pp |
+| lavd-test | 300 / 300 | EXACT 266 / NEAR 21 / FAIL 13 | 95.7% | EXACT 272 / NEAR 19 / FAIL 9 | 97.0% | +1.3 pp |
+| hotel-lights | 900 / 900 | EXACT 816 / FAIL 84 | 90.7% | EXACT 814 / FAIL 86 | 90.4% | -0.2 pp |
+
+Profile speed and latency:
+
+| Profile | B12X gen tok/s avg | Lucifer gen tok/s avg | Lucifer/B12X | B12X elapsed avg | Lucifer elapsed avg | Elapsed ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| estonia | 41.1 | 80.6 | 1.96x | 69.8s | 45.4s | 0.65x |
+| lavd-test | 84.0 | 129.2 | 1.54x | 226.8s | 141.7s | 0.62x |
+| hotel-lights | 46.2 | 93.1 | 2.02x | 448.4s | 221.6s | 0.49x |
+
+Output length and TTFT:
+
+| Profile | B12X tok avg | B12X tok p50/p90 | Lucifer tok avg | Lucifer tok p50/p90 | B12X TTFT | Lucifer TTFT |
+|---|---:|---:|---:|---:|---:|---:|
+| estonia | 2,496.9 | 2,146/4,516 | 2,763.1 | 2,385/5,018 | 11.33s | 12.29s |
+| lavd-test | 19,470.5 | 16,772/26,873 | 18,397.6 | 16,482/28,233 | 3.64s | 1.78s |
+| hotel-lights | 21,073.6 | 19,288/28,850 | 20,684.2 | 19,074/28,492 | 0.98s | 1.53s |
+
+Interpretation: quality is effectively tied on estonia and hotel-lights.
+Lucifer is slightly better on LAVD-test (+1.3 pp success). Lucifer is
+substantially faster in these profile workloads, especially estonia and
+hotel-lights.
+
+## B12X Speed
+
+Decode benchmark:
 
 ```bash
 python3 /root/llm-inference-bench/llm_decode_bench.py \
@@ -160,7 +207,7 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
   --output OUT.json
 ```
 
-Aggregate decode tok/s:
+B12X aggregate decode tok/s:
 
 | TP | MTP | Draft sampling | C1 | C2 | C4 | C8 | C16 | C32 | C64 | Accept avg |
 |:---:|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -171,33 +218,7 @@ Aggregate decode tok/s:
 | TP4 | on | probabilistic | 285.4 | 470.9 | 724.5 | 1,071.1 | 1,504.3 | 1,996.9 | 2,544.7 | 0.706 |
 | TP4 | on | greedy | 247.3 | 404.8 | 607.7 | 915.4 | 1,203.5 | 1,689.8 | 2,032.2 | 0.538 |
 
-Result JSONs:
-
-```text
-/root/bench-results/ds4-black-pr11-20260608/decode-sweep/
-/root/bench-results/ds4-black-pr11-20260609/decode-greedy/
-```
-
-For TP4, use the `*-fullcc.json` files for the headline because the first run
-auto-skipped some high-concurrency cells before the explicit KV budget rerun.
-
-## Prefill Speed
-
-Benchmark:
-
-```bash
-python3 /root/llm-inference-bench/llm_decode_bench.py \
-  --host 127.0.0.1 \
-  --port PORT \
-  --model DeepSeek-V4-Flash \
-  --prefill-only \
-  --prefill-contexts 8k,64k,128k \
-  --prefill-duration 10 \
-  --max-tokens 16 \
-  --output OUT.json
-```
-
-Warm prefill rerun, client prompt tokens / TTFT:
+B12X warm prefill rerun, MTP on:
 
 | TP | MTP | ctx | tokens | TTFT s | tok/s | samples |
 |:---:|:---:|---:|---:|---:|---:|---:|
@@ -208,15 +229,69 @@ Warm prefill rerun, client prompt tokens / TTFT:
 | TP4 | on | 64k | 64,562 | 8.288 | 7,790 | 2 |
 | TP4 | on | 128k | 128,995 | 17.973 | 7,177 | 1 |
 
-The first TP2 8k run was a cold/warmup outlier: `3,987 tok/s` on rerun 1 and
-`6,978 tok/s` on rerun 2. TP4 8k was stable across the two reruns
-(`8,350` then `8,236 tok/s`).
+B12X no-MTP prefill was not remeasured in the 2026-06-09 rerun, so it is not
+used for prefill speedup claims.
 
 Result JSONs:
 
 ```text
+/root/bench-results/ds4-black-pr11-20260608/decode-sweep/
+/root/bench-results/ds4-black-pr11-20260609/decode-greedy/
 /root/bench-results/ds4-black-pr11-20260609/prefill-rerun/
 ```
+
+## Lucifer Cutlass Speed
+
+Lucifer speed result root:
+
+```text
+/root/bench-results/ds4-lucifer-cutlass-20260609/speed-sweep-v2/
+```
+
+Lucifer aggregate decode tok/s:
+
+| TP | MTP | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| TP2 | off | 124.4 | 207.8 | 352.0 | 570.8 | 856.9 | 1,267.4 | 1,940.9 |
+| TP2 | on | 200.9 | 337.2 | 381.8 | 763.6 | 1,128.7 | 1,749.8 | 2,660.3 |
+| TP4 | off | 137.8 | 243.7 | 436.2 | 751.2 | 1,176.8 | 1,790.0 | 2,686.2 |
+| TP4 | on | 237.0 | 412.8 | 562.3 | 1,076.0 | 1,606.3 | 2,508.5 | 3,670.9 |
+
+Lucifer prefill:
+
+| TP | MTP | 8k tok/s | 64k tok/s | 128k tok/s | 8k TTFT | 64k TTFT | 128k TTFT |
+|---|---|---:|---:|---:|---:|---:|---:|
+| TP2 | off | 13,508 | 12,788 | 11,705 | 0.607s | 5.048s | 11.019s |
+| TP2 | on | 13,315 | 12,483 | 11,457 | 0.615s | 5.171s | 11.258s |
+| TP4 | off | 15,919 | 14,906 | 13,575 | 0.515s | 4.331s | 9.501s |
+| TP4 | on | 15,219 | 14,279 | 13,069 | 0.538s | 4.521s | 9.869s |
+
+Lucifer startup logs show FlashInfer autotune warnings for some MTP shapes
+outside the tuned MoE bucket range; those warnings did not prevent completion,
+but they are relevant when interpreting possible single-cell speed cliffs.
+
+## Speed Comparison
+
+Decode speedup is Lucifer/B12X. Values above `1.00x` mean Lucifer is faster.
+
+| TP | MTP | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| TP2 | off | 0.94x | 0.94x | 0.98x | 1.05x | 1.10x | 1.16x | 1.31x |
+| TP2 | on | 0.90x | 0.95x | 0.73x | 1.03x | 1.12x | 1.28x | 1.49x |
+| TP4 | off | 0.87x | 0.87x | 0.92x | 0.99x | 1.04x | 1.08x | 1.17x |
+| TP4 | on | 0.83x | 0.88x | 0.78x | 1.00x | 1.07x | 1.26x | 1.44x |
+
+Prefill speedup is available only for MTP-on, because B12X no-MTP prefill was
+not remeasured in the comparable 2026-06-09 rerun.
+
+| TP | MTP | 8k | 64k | 128k |
+|---|---|---:|---:|---:|
+| TP2 | on | 1.91x | 1.88x | 1.86x |
+| TP4 | on | 1.85x | 1.83x | 1.82x |
+
+Interpretation: B12X remains faster for low-concurrency decode cells, but
+Lucifer becomes faster at higher concurrency. Lucifer prefill is roughly
+1.8-1.9x faster than the B12X MTP-on rerun.
 
 ## KLD vs H200
 
@@ -254,36 +329,13 @@ Result JSON:
 /root/vllm/artifacts/ds4_flash_local_black_pr11_logits_20260609/nomtp_tp2_black_pr11_b12x_rowmeta_fullrows_fullcalls128/kld_vs_h200_ref_global_rows_allprompts.json
 ```
 
-## Profile Farm
-
-The 30-run quality farm used eight TP2+MTP2 replicas on ports `5500-5507`,
-one GPU pair per replica, `MAX_MODEL_LEN=262144`, and `max_num_seqs=64`.
-The estonia rerun used `thinking=true` and `reasoning_effort=high`. Because the
-prompt is about `134k` tokens and each TP2 replica had only about `320k` KV
-tokens, the rerun used one request per replica per wave.
-
-Results:
-
-```text
-/root/bench-results/ds4-black-pr11-20260608/profiles-262k/
-/root/bench-results/ds4-black-pr11-20260609/estonia-thinking-high/
-```
-
-Profile summary:
-
-| Profile | Samples | Score | Output tok avg | Output tok p50 | Elapsed avg | Gen tok/s avg |
-|---|---:|---|---:|---:|---:|---:|
-| estonia, initial/default kwargs | 30 | PASS 11 / FAIL 19 | 161.2 | 148.0 | 1.4s | 216.1 |
-| estonia, `thinking=true`, `reasoning_effort=high` | 30 | PASS 30 / FAIL 0 | 2,111.0 | 1,510.0 | 11.0s | 204.0 |
-| lavd-test | 30 | EXACT 2 / NEAR 2 / FAIL 26 | 2,290.7 | 275.5 | 15.2s | 156.2 |
-| hotel | 30 | FAIL 30 | 3,407.5 | 2,953.5 | 24.5s | 137.5 |
-
 ## Notes
 
-- The speed matrix is healthy and coherent for the short smoke tests.
-- The original profile quality results are weak without the DS4 thinking/high
-  override; estonia becomes stable at `PASS 30/30` with the override.
-- Greedy MTP works with local argmax enabled, but was slower than probabilistic
-  MTP in this matrix.
 - The key B12X PR11 fix is the compressed MLA decode split threshold for MTP
   full graph rows up to `64 * (1 + 2) = 192`.
+- B12X speed-matrix and greedy services passed the local smoke test with
+  coherent output and `chinese_count=0`.
+- Greedy B12X MTP works with local argmax enabled, but was slower than
+  probabilistic MTP in this matrix.
+- Lucifer Cutlass profile quality is close to B12X quality, with better
+  LAVD-test success and much higher profile throughput.
