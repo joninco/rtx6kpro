@@ -56,6 +56,7 @@ experts and routes tokens to expert owners.
 | `Live sequence length` | `L` per sequence | Number of cached tokens still visible to a sequence. This is the main driver of decode attention cost. |
 | `Prefill` | `T = total prompt tokens` | Prompt ingestion. Large dense batches, high parallelism, throughput-oriented kernels. |
 | `Decode` | `T ~= B` | Autoregressive generation. Small token batches, long KV reads, irregular MoE routing, and latency-sensitive kernels. |
+| `Speculative decoding` | `T = B * num_spec_tokens` | A draft proposes `num_spec_tokens` candidate tokens per sequence, and the target model verifies them in one forward pass. So the active token count is `B * num_spec_tokens`, not `B`. Decode then behaves more like a small prefill: larger `T` and more GEMM/MoE work per step, while KV reads still scale with `L`. |
 | `Paged attention` | KV `[pages, page_size, G, D]` | Serving-friendly KV layout for variable-length sequences. KV may be BF16/FP16 or FP8. |
 | `Sparse attention` / `NSA` | Selected blocks from `[B, L, G, D]` | Reads selected history blocks instead of all of `L`. The benefit grows with context length. |
 | `MLA` | Shared latent/noPE cache `[B, L, C]` plus RoPE cache `[B, L, D_rope]` | Multi-head Latent Attention replaces per-head cached K/V vectors with one compressed cache vector shared across attention heads. Each head uses learned projection weights to recover its effective key/value behavior. |
@@ -148,6 +149,24 @@ Prefill has many prompt tokens, so kernels can run large dense tiles and keep
 the GPU busy. Decode usually has one new token per sequence, so batches are
 smaller, cache reads are longer, and routing is more irregular. That is why the
 same model operation often needs different prefill and decode kernels.
+
+### Speculative Decoding Inflates Active Tokens
+
+Plain decode runs one new token per sequence, so `T ~= B`. Speculative decoding
+breaks that assumption. A small draft model proposes `num_spec_tokens` candidate
+tokens per sequence, and the target model verifies a whole block of them in a
+single forward pass.
+
+So the active token count under speculative decoding is
+`T = B * num_spec_tokens`, not `B`. With batch size `B` and `num_spec_tokens`
+draft tokens per sequence, the target step processes `B * num_spec_tokens`
+positions at once. (Some frameworks verify one extra bonus token per sequence,
+making it `B * (num_spec_tokens + 1)`.)
+
+This is why a speculative decode step looks more like a small prefill than a
+plain decode step: `T` is larger, so GEMM and MoE work per step grow, while KV
+reads still scale with `L`. The payoff is fewer target forward passes whenever
+the draft guesses well.
 
 ### Sparse Attention Trades Selection For Fewer Reads
 
