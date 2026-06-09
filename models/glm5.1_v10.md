@@ -115,6 +115,134 @@ DCP_SIZE=4 MTP=0 GPU_MEMORY_UTILIZATION=0.96 PORT=5329 /root/run-glm51-black-pr1
 DCP_SIZE=8 MTP=1 GPU_MEMORY_UTILIZATION=0.94 PORT=5329 /root/run-glm51-black-pr11
 ```
 
+## Docker Compose
+
+This compose recipe is the direct equivalent of `/root/run-glm51-black-pr11`.
+Defaults are set for the main tested configuration: DCP4, MTP on, force A16,
+port `5329`, and 8 GPUs.
+
+```yaml
+services:
+  glm51-v10:
+    image: ${IMAGE:-voipmonitor/vllm:black-benediction-bb6c5b7-b12xd90d89c-cu132}
+    container_name: ${NAME:-glm51-black-pr11}
+    network_mode: host
+    ipc: host
+    shm_size: 32g
+    runtime: nvidia
+    gpus: all
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    volumes:
+      - /mnt:/mnt
+      - /cache:/cache
+      - /root/.cache/huggingface:/root/.cache/huggingface
+      - /root/bench-results:/root/bench-results
+      - /root/vllm/artifacts:/root/vllm/artifacts
+    environment:
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_DEVICE_MAX_CONNECTIONS: "32"
+      OMP_NUM_THREADS: "16"
+      CUTE_DSL_ARCH: sm_120a
+      NCCL_IB_DISABLE: "1"
+      NCCL_P2P_LEVEL: SYS
+      NCCL_PROTO: LL,LL128,Simple
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+      SAFETENSORS_FAST_GPU: "1"
+      VLLM_WORKER_MULTIPROC_METHOD: spawn
+      VLLM_USE_AOT_COMPILE: "1"
+      VLLM_USE_BREAKABLE_CUDAGRAPH: "0"
+      VLLM_USE_MEGA_AOT_ARTIFACT: "1"
+      VLLM_USE_FLASHINFER_SAMPLER: "1"
+      VLLM_USE_B12X_FP8_GEMM: "1"
+      VLLM_USE_B12X_MOE: "1"
+      VLLM_USE_B12X_SPARSE_INDEXER: "1"
+      VLLM_USE_V2_MODEL_RUNNER: "1"
+      VLLM_ENABLE_PCIE_ALLREDUCE: "1"
+      VLLM_PCIE_ALLREDUCE_BACKEND: b12x
+      VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE: 64KB
+      USES_B12X: "True"
+      B12X_DENSE_SPLITK_TURBO: "1"
+      B12X_W4A16_TC_DECODE: "1"
+      B12X_MOE_FORCE_A16: "1"
+      MODEL: ${MODEL:-/root/.cache/huggingface/hub/models--lukealonso--GLM-5.1-NVFP4-MTP/snapshots/78b7fe365f3905b4e0261a85182fefdbd5137989}
+      MTP_MODEL: ${MTP_MODEL:-/root/.cache/huggingface/hub/models--lukealonso--GLM-5.1-NVFP4-MTP/snapshots/78b7fe365f3905b4e0261a85182fefdbd5137989}
+      SERVED_MODEL_NAME: ${SERVED_MODEL_NAME:-GLM-5.1-NVFP4-MTP}
+      PORT: ${PORT:-5329}
+      TP_SIZE: ${TP_SIZE:-8}
+      DCP_SIZE: ${DCP_SIZE:-4}
+      MTP: ${MTP:-1}
+      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.94}
+      MAX_NUM_SEQS: ${MAX_NUM_SEQS:-64}
+      MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-8192}
+      NUM_SPECULATIVE_TOKENS: ${NUM_SPECULATIVE_TOKENS:-3}
+      MAX_CUDAGRAPH_CAPTURE_SIZE: ${MAX_CUDAGRAPH_CAPTURE_SIZE:-}
+      SPEC_CONFIG: ${SPEC_CONFIG:-}
+      HF_OVERRIDES: '{"index_topk_pattern":"FFSFSSSFSSFFFSSSFFFSFSSSSSSFFSFFSFFSSFFFFFFSFFFFFSFFSSSSSSFSFFFSFSSSFSFFSFFSSS"}'
+    entrypoint:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+        unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
+        if [ -z "$${MAX_CUDAGRAPH_CAPTURE_SIZE:-}" ]; then
+          if [ "$${MTP}" = "1" ]; then
+            MAX_CUDAGRAPH_CAPTURE_SIZE=$$((MAX_NUM_SEQS * (NUM_SPECULATIVE_TOKENS + 1)))
+          else
+            MAX_CUDAGRAPH_CAPTURE_SIZE="$${MAX_NUM_SEQS}"
+          fi
+        fi
+        SPEC_ARGS=()
+        if [ "$${MTP}" = "1" ]; then
+          SPEC_CONFIG="$${SPEC_CONFIG:-$$(printf '{"model":"%s","method":"mtp","num_speculative_tokens":%s,"moe_backend":"b12x","draft_sample_method":"probabilistic"}' "$${MTP_MODEL}" "$${NUM_SPECULATIVE_TOKENS}")}"
+          SPEC_ARGS=(--speculative-config "$${SPEC_CONFIG}")
+        fi
+        cd /
+        exec /opt/venv/bin/python -m vllm.entrypoints.cli.main serve "$${MODEL}" \
+          --served-model-name "$${SERVED_MODEL_NAME}" \
+          --trust-remote-code \
+          --host 0.0.0.0 \
+          --port "$${PORT}" \
+          --tensor-parallel-size "$${TP_SIZE}" \
+          --pipeline-parallel-size 1 \
+          --decode-context-parallel-size "$${DCP_SIZE}" \
+          --dcp-comm-backend ag_rs \
+          --dcp-kv-cache-interleave-size 1 \
+          --enable-chunked-prefill \
+          --enable-prefix-caching \
+          --load-format fastsafetensors \
+          --async-scheduling \
+          -cc.pass_config.fuse_allreduce_rms=True \
+          --gpu-memory-utilization "$${GPU_MEMORY_UTILIZATION}" \
+          --max-num-batched-tokens "$${MAX_NUM_BATCHED_TOKENS}" \
+          --max-num-seqs "$${MAX_NUM_SEQS}" \
+          --max-cudagraph-capture-size "$${MAX_CUDAGRAPH_CAPTURE_SIZE}" \
+          --quantization modelopt_fp4 \
+          --attention-backend B12X_MLA_SPARSE \
+          --moe-backend b12x \
+          --kv-cache-dtype fp8 \
+          --tool-call-parser glm47 \
+          --enable-auto-tool-choice \
+          --reasoning-parser glm45 \
+          --hf-overrides "$${HF_OVERRIDES}" \
+          "$${SPEC_ARGS[@]}"
+```
+
+Useful overrides:
+
+```bash
+# DCP4, MTP on.
+DCP_SIZE=4 MTP=1 GPU_MEMORY_UTILIZATION=0.94 docker compose up -d
+
+# DCP4, MTP off.
+DCP_SIZE=4 MTP=0 GPU_MEMORY_UTILIZATION=0.96 docker compose up -d
+
+# DCP8, MTP on.
+DCP_SIZE=8 MTP=1 GPU_MEMORY_UTILIZATION=0.94 docker compose up -d
+```
+
 ## Startup Capacity
 
 | DCP | MTP | GPU util | KV tokens | Max concurrency @ 202,752 | Graph memory |
