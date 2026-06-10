@@ -4,9 +4,74 @@ This page documents the reproducible GLM-5.1 MXFP4 hybrid checkpoint and the
 small vLLM overlay image used to load it without Quark runtime hooks.
 
 Status: built on 2026-06-10. The tensor checkpoint was prepared locally and the
-vLLM changes live on a separate local-inference-lab branch. The live GLM server
-was not restarted during this documentation/image step; runtime validation of
-this exact native image should be done on the next planned restart.
+vLLM changes live on a separate local-inference-lab branch. Use the native
+checkpoint path below with the Docker Compose recipe on this page; do not mount
+the old Quark/index-filter runtime overlays.
+
+## TL;DR: Run The Clean Native Checkpoint
+
+Use this checkpoint:
+
+```text
+/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610
+```
+
+Use this image:
+
+```text
+voipmonitor/vllm:glm51-native-mxfp4-f07a09d-cu132-20260610
+```
+
+Create `/root/glm51-mxfp4/compose.yaml` from the **Docker Compose** section
+below, then start the default TP8/DCP1/no-MTP server:
+
+```bash
+mkdir -p /root/glm51-mxfp4
+cd /root/glm51-mxfp4
+
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+PORT=5329 \
+TP_SIZE=8 \
+DCP_SIZE=1 \
+MTP=0 \
+docker compose up -d
+```
+
+Watch startup and verify the expected native MXFP4 + FlashInfer Cutlass path:
+
+```bash
+docker logs -f glm51-native-mxfp4
+
+docker logs glm51-native-mxfp4 2>&1 | \
+  rg "FLASHINFER_CUTLASS_MXFP4_MXFP8|standard SwiGLU|B12X_MLA_SPARSE|V2 Model Runner"
+```
+
+Smoke test:
+
+```bash
+python3 /mnt/test.py --port 5329 -L
+python3 /root/llm-inference-bench/llm_decode_bench.py \
+  --port 5329 \
+  --concurrency 1 \
+  --contexts 0k \
+  --max-tokens 512 \
+  --skip-prefill
+```
+
+To enable MTP, restart with:
+
+```bash
+cd /root/glm51-mxfp4
+MTP=1 NUM_SPECULATIVE_TOKENS=3 DRAFT_SAMPLE_METHOD=probabilistic docker compose up -d
+```
+
+Important runtime constraints:
+
+```text
+Do not set B12X_MOE_FORCE_A16 for this checkpoint.
+Do not mount old Quark/index-filter/load-diagnostic overlays.
+The compose entrypoint intentionally unsets NCCL_GRAPH_FILE and NCCL_GRAPH_DUMP_FILE.
+```
 
 ## Final Artifacts
 
