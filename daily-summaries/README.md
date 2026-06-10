@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-10](2026-06/2026-06-10.md) | CUDA 13.3 released — fixes critical WGMMA data race bug causing silent result corruption in B12X N |
 | [2026-06-09](2026-06/2026-06-09.md) | New Lucifer Docker image `hg436/vllm-public:lucifer-9d9a0a0` released: vLLM main + FlashInfer #3395  |
 | [2026-06-08](2026-06/2026-06-08.md) | a8 vs a16 accuracy test (900 runs): Jon ran Estonia, hotel-lights, and lavd benchmarks; a8 won or ti |
 | [2026-06-07](2026-06/2026-06-07.md) | DSV4-Flash prefix cache bug confirmed: On TP=4, the cache was evicting early and only utilizing ~200 |
@@ -111,6 +112,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-10](2026-06/2026-06-10.md) | CUDA 13.3 released — fixes critical WGMMA data race bug causing silent result corruption in B12X N |
 | [2026-06-09](2026-06/2026-06-09.md) | New Lucifer Docker image `hg436/vllm-public:lucifer-9d9a0a0` released: vLLM main + FlashInfer #3395  |
 | [2026-06-08](2026-06/2026-06-08.md) | a8 vs a16 accuracy test (900 runs): Jon ran Estonia, hotel-lights, and lavd benchmarks; a8 won or ti |
 | [2026-06-07](2026-06/2026-06-07.md) | DSV4-Flash prefix cache bug confirmed: On TP=4, the cache was evicting early and only utilizing ~200 |
