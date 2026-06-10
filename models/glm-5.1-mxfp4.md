@@ -1,0 +1,470 @@
+# GLM-5.1 MXFP4 Hybrid Native Checkpoint
+
+This page documents the reproducible GLM-5.1 MXFP4 hybrid checkpoint and the
+small vLLM overlay image used to load it without Quark runtime hooks.
+
+Status: built on 2026-06-10. The tensor checkpoint was prepared locally and the
+vLLM changes live on a separate local-inference-lab branch. The live GLM server
+was not restarted during this documentation/image step; runtime validation of
+this exact native image should be done on the next planned restart.
+
+## Final Artifacts
+
+Checkpoint:
+
+```text
+/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610
+```
+
+Docker image:
+
+```text
+voipmonitor/vllm:glm51-native-mxfp4-f07a09d-cu132-20260610
+```
+
+Docker image digest:
+
+```text
+sha256:2bcffff1b4932854a8b6a8fcc1a1cdb49e2d83249ddc394cb659e555b9f3b46d
+```
+
+vLLM branch:
+
+```text
+https://github.com/local-inference-lab/vllm/tree/codex/glm51-native-mxfp4-20260610
+```
+
+vLLM commit:
+
+```text
+f07a09da7aa1792f1383c0653480fbd9d836f6eb
+```
+
+Base image:
+
+```text
+voipmonitor/vllm:black-benediction-b12xpr11-vllmbb6c5b7-b12xd90d89c-fi3395b41aa8d-dg324aced12c-cu132-20260608
+```
+
+Base image digest:
+
+```text
+sha256:ce23a9b075bd7138ce3b12ee29609b98606e5050e2def4a29bbb917ad96e5997
+```
+
+## Source Inputs
+
+Luke NVFP4-MTP source:
+
+```text
+/root/.cache/huggingface/hub/models--lukealonso--GLM-5.1-NVFP4-MTP/snapshots/78b7fe365f3905b4e0261a85182fefdbd5137989
+```
+
+AMD MXFP4 source:
+
+```text
+/root/.cache/huggingface/hub/models--amd--GLM-5.1-MXFP4/snapshots/4dded8b53961222a5d98378fa8b975bc8816599d
+```
+
+Intermediate Quark hybrid:
+
+```text
+/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-QuarkExcludeFix-20260609
+```
+
+Clean repack:
+
+```text
+/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-CleanRepack-20260610
+```
+
+Clean repack log:
+
+```text
+/root/kld/repack_glm51_hybrid_mxfp4_clean_20260610.log
+```
+
+## Tensor Lineage
+
+The checkpoint is not a pure AMD checkpoint and not a metadata rename of Luke's
+NVFP4 checkpoint.
+
+| Tensor group | Source |
+|---|---|
+| Routed expert `mlp.experts.*.{gate,up,down}_proj.weight` | AMD `GLM-5.1-MXFP4` |
+| Routed expert `mlp.experts.*.{gate,up,down}_proj.weight_scale` | AMD `GLM-5.1-MXFP4` |
+| Attention, routers, dense layers, shared experts, norms, embeddings, LM head | Luke `GLM-5.1-NVFP4-MTP` |
+| GLM MTP / next-token layer `model.layers.78.*` | Luke `GLM-5.1-NVFP4-MTP` |
+
+AMD MXFP4 routed experts have `weight` plus `weight_scale`. The scale is uint8
+E8M0 with group size 32. Luke ModelOpt NVFP4 tensors are structurally different:
+they include `weight_scale_2` and `input_scale`. Therefore this checkpoint is
+handled as native MXFP4 routed MoE, not converted into Luke/ModelOpt NVFP4.
+
+## Clean Repack
+
+The Quark hybrid initially referenced original source shard names. The clean
+repack makes a standalone checkpoint whose index only points to local
+`model-xxxxx-of-00365.safetensors` shards. This removes the old exact-index
+runtime loader overlay.
+
+```bash
+python3 /root/kld/tools/repack_safetensors_from_index.py \
+  --src /root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-QuarkExcludeFix-20260609 \
+  --dst /root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-CleanRepack-20260610 \
+  --force 2>&1 | tee /root/kld/repack_glm51_hybrid_mxfp4_clean_20260610.log
+```
+
+Expected clean-repack state:
+
+```text
+index entries: 118238
+unique shard files: 365
+bad index refs outside model-*: 0
+```
+
+Validate the index:
+
+```bash
+python3 - <<'PY'
+import json
+import os
+
+ckpt = "/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-CleanRepack-20260610"
+idx = json.load(open(os.path.join(ckpt, "model.safetensors.index.json")))
+refs = list(idx["weight_map"].values())
+print("index_entries", len(refs))
+print("unique_files", len(set(refs)))
+print("bad_refs", sum(1 for name in refs if not name.startswith("model-")))
+PY
+```
+
+## Native MXFP4 Config
+
+The final native checkpoint is a hardlink clone of the clean repack. Tensor data
+is not duplicated. Only `config.json` is replaced so vLLM selects the native
+`mxfp4` quantization path instead of Quark.
+
+```bash
+SRC=/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-CleanRepack-20260610
+DST=/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610
+
+cp -al "$SRC" "$DST"
+
+python3 - <<'PY'
+import json
+import os
+import tempfile
+
+dst = "/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610"
+path = os.path.join(dst, "config.json")
+with open(path) as f:
+    cfg = json.load(f)
+
+cfg["quantization_config"] = {
+    "quant_method": "mxfp4",
+    "format": "native_glm_routed_moe",
+    "weight_dtype": "mxfp4",
+    "weight_scale_format": "e8m0",
+    "weight_group_size": 32,
+    "activation_dtype": "mxfp8_dynamic",
+    "codex_notes": {
+        "source": "Hardlinked from clean Luke NVFP4-MTP + AMD MXFP4 routed-expert repack.",
+        "why": "Avoid Quark runtime config; route GLM routed experts through native vLLM MXFP4 MoE.",
+        "launch": "Use --moe-backend flashinfer_cutlass_afp8 for FlashInfer Cutlass MXFP4xMXFP8.",
+        "previous_quant_method": "quark",
+    },
+}
+
+fd, tmp = tempfile.mkstemp(dir=dst, prefix=".config.", suffix=".json")
+with os.fdopen(fd, "w") as f:
+    json.dump(cfg, f, indent=2, sort_keys=False)
+    f.write("\n")
+os.replace(tmp, path)
+PY
+```
+
+Validate that only config metadata was separated:
+
+```bash
+python3 - <<'PY'
+import json
+import os
+
+src = "/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-CleanRepack-20260610"
+dst = "/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610"
+
+for rel in ["config.json", "model-00001-of-00365.safetensors", "model.safetensors.index.json"]:
+    ss = os.stat(os.path.join(src, rel))
+    ds = os.stat(os.path.join(dst, rel))
+    print(rel, "same_inode", (ss.st_dev, ss.st_ino) == (ds.st_dev, ds.st_ino))
+
+for root in [src, dst]:
+    cfg = json.load(open(os.path.join(root, "config.json")))
+    print(os.path.basename(root), cfg["quantization_config"]["quant_method"])
+PY
+```
+
+Expected output:
+
+```text
+config.json same_inode False
+model-00001-of-00365.safetensors same_inode True
+model.safetensors.index.json same_inode True
+GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-CleanRepack-20260610 quark
+GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610 mxfp4
+```
+
+## vLLM Changes
+
+Branch:
+
+```text
+https://github.com/local-inference-lab/vllm/tree/codex/glm51-native-mxfp4-20260610
+```
+
+Changed files:
+
+| File | Purpose |
+|---|---|
+| `vllm/model_executor/layers/quantization/mxfp4.py` | For non-`gpt_oss` models, route `Mxfp4Config` to the native `Mxfp4MoEMethod`. |
+| `vllm/model_executor/layers/fused_moe/oracle/mxfp4.py` | Add native FlashInfer Cutlass MXFP4 conversion for GLM contiguous `[gate, up]` layout, zero MoE biases when absent, and interleaved MXFP8 scales. |
+| `vllm/model_executor/layers/fused_moe/experts/flashinfer_cutlass_moe.py` | Apply GPT-OSS alpha/beta/clamp SwiGLU defaults only to `model_type=gpt_oss`; GLM uses standard SwiGLU. |
+
+Static validation:
+
+```bash
+cd /root/vllm/worktrees/vllm-glm51-native-mxfp4-20260610
+python3 -m py_compile \
+  vllm/model_executor/layers/quantization/mxfp4.py \
+  vllm/model_executor/layers/fused_moe/oracle/mxfp4.py \
+  vllm/model_executor/layers/fused_moe/experts/flashinfer_cutlass_moe.py
+git diff --check HEAD~
+```
+
+## Overlay Docker Image
+
+The image is an overlay on top of the existing Black Benediction image. It does
+not rebuild vLLM, B12X, FlashInfer, DeepGEMM, CUDA, or Torch. It only replaces
+the three Python files above.
+
+Dockerfile:
+
+```Dockerfile
+FROM voipmonitor/vllm:black-benediction-b12xpr11-vllmbb6c5b7-b12xd90d89c-fi3395b41aa8d-dg324aced12c-cu132-20260608
+
+LABEL org.opencontainers.image.title="GLM-5.1 native MXFP4 vLLM overlay"
+LABEL org.opencontainers.image.source="https://github.com/local-inference-lab/vllm/tree/codex/glm51-native-mxfp4-20260610"
+LABEL org.opencontainers.image.revision="f07a09da7aa1792f1383c0653480fbd9d836f6eb"
+LABEL org.opencontainers.image.base.name="voipmonitor/vllm:black-benediction-b12xpr11-vllmbb6c5b7-b12xd90d89c-fi3395b41aa8d-dg324aced12c-cu132-20260608"
+
+COPY vllm/model_executor/layers/quantization/mxfp4.py /opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/mxfp4.py
+COPY vllm/model_executor/layers/fused_moe/oracle/mxfp4.py /opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/oracle/mxfp4.py
+COPY vllm/model_executor/layers/fused_moe/experts/flashinfer_cutlass_moe.py /opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/experts/flashinfer_cutlass_moe.py
+```
+
+Build and push:
+
+```bash
+docker build \
+  -f /root/vllm/build/glm51-native-mxfp4-f07a09d/Dockerfile \
+  -t voipmonitor/vllm:glm51-native-mxfp4-f07a09d-cu132-20260610 \
+  /root/vllm/worktrees/vllm-glm51-native-mxfp4-20260610
+
+docker push voipmonitor/vllm:glm51-native-mxfp4-f07a09d-cu132-20260610
+```
+
+Offline image sanity:
+
+```bash
+docker run --rm --network none --entrypoint /bin/bash \
+  -v /root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610:/model:ro \
+  voipmonitor/vllm:glm51-native-mxfp4-f07a09d-cu132-20260610 \
+  -lc '/opt/venv/bin/python - <<PY
+from transformers import AutoConfig
+from vllm.model_executor.layers.quantization import get_quantization_config
+cfg = AutoConfig.from_pretrained("/model", trust_remote_code=True)
+qc = cfg.quantization_config
+cls = get_quantization_config("mxfp4")
+print("model_type", cfg.model_type)
+print("quant_method", qc.get("quant_method"))
+print("format", qc.get("format"))
+print("quant_cls", cls.__name__)
+print("quant_name", cls.get_name())
+PY'
+```
+
+Expected output:
+
+```text
+model_type glm_moe_dsa
+quant_method mxfp4
+format native_glm_routed_moe
+quant_cls Mxfp4Config
+quant_name mxfp4
+```
+
+## Runtime Rules
+
+Use `--moe-backend flashinfer_cutlass_afp8`. This selects the native
+FlashInfer Cutlass MXFP4xMXFP8 MoE path.
+
+Do not set `B12X_MOE_FORCE_A16` for this checkpoint. That flag only applies to
+B12X MoE W4A16 decode. This checkpoint uses FlashInfer Cutlass MoE.
+
+Do not mount the old runtime overlays for this native checkpoint:
+
+```text
+/root/vllm/runtime-overlays/glm51-mxfp4-quark-mxfp8
+/root/vllm/runtime-overlays/glm51-mxfp4-index-filter
+/root/vllm/runtime-overlays/glm51-mxfp4-load-diagnostic
+```
+
+Always unset empty NCCL graph variables before launching:
+
+```bash
+unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
+```
+
+## Docker Compose
+
+This compose recipe is the intended native launch. Defaults use TP8, DCP1, port
+`5329`, KV fp8, 64 max sequences, and MTP disabled. Enable MTP with `MTP=1`.
+
+```yaml
+services:
+  glm51-mxfp4:
+    image: ${IMAGE:-voipmonitor/vllm:glm51-native-mxfp4-f07a09d-cu132-20260610}
+    container_name: ${NAME:-glm51-native-mxfp4}
+    network_mode: host
+    ipc: host
+    shm_size: 32g
+    runtime: nvidia
+    gpus: all
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    volumes:
+      - /mnt:/mnt
+      - /cache:/cache
+      - /root/.cache/huggingface:/root/.cache/huggingface
+      - /root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610:/model:ro
+    environment:
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_DEVICE_MAX_CONNECTIONS: "32"
+      OMP_NUM_THREADS: "16"
+      CUTE_DSL_ARCH: sm_120a
+      NCCL_IB_DISABLE: "1"
+      NCCL_P2P_LEVEL: SYS
+      NCCL_PROTO: LL,LL128,Simple
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+      SAFETENSORS_FAST_GPU: "1"
+      VLLM_WORKER_MULTIPROC_METHOD: spawn
+      VLLM_USE_AOT_COMPILE: "1"
+      VLLM_USE_BREAKABLE_CUDAGRAPH: "0"
+      VLLM_USE_MEGA_AOT_ARTIFACT: "1"
+      VLLM_USE_FLASHINFER_SAMPLER: "1"
+      VLLM_USE_B12X_FP8_GEMM: "1"
+      VLLM_USE_B12X_SPARSE_INDEXER: "1"
+      VLLM_USE_V2_MODEL_RUNNER: "1"
+      VLLM_ENABLE_PCIE_ALLREDUCE: "1"
+      VLLM_PCIE_ALLREDUCE_BACKEND: b12x
+      VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE: 64KB
+      USES_B12X: "True"
+      B12X_DENSE_SPLITK_TURBO: "1"
+      MODEL: /model
+      MTP_MODEL: /model
+      SERVED_MODEL_NAME: ${SERVED_MODEL_NAME:-GLM-5.1-MXFP4-NATIVE}
+      PORT: ${PORT:-5329}
+      TP_SIZE: ${TP_SIZE:-8}
+      DCP_SIZE: ${DCP_SIZE:-1}
+      MTP: ${MTP:-0}
+      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.94}
+      MAX_NUM_SEQS: ${MAX_NUM_SEQS:-64}
+      MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-8192}
+      MAX_CUDAGRAPH_CAPTURE_SIZE: ${MAX_CUDAGRAPH_CAPTURE_SIZE:-256}
+      NUM_SPECULATIVE_TOKENS: ${NUM_SPECULATIVE_TOKENS:-3}
+      DRAFT_SAMPLE_METHOD: ${DRAFT_SAMPLE_METHOD:-probabilistic}
+      HF_OVERRIDES: '{"index_topk_pattern":"FFSFSSSFSSFFFSSSFFFSFSSSSSSFFSFFSFFSSFFFFFFSFFFFFSFFSSSSSSFSFFFSFSSSFSFFSFFSSS"}'
+    entrypoint:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+        unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
+        SPEC_ARGS=()
+        if [ "$${MTP}" = "1" ]; then
+          SPEC_CONFIG=$$(printf '{"model":"%s","method":"mtp","num_speculative_tokens":%s,"moe_backend":"flashinfer_cutlass_afp8","draft_sample_method":"%s"}' "$${MTP_MODEL}" "$${NUM_SPECULATIVE_TOKENS}" "$${DRAFT_SAMPLE_METHOD}")
+          SPEC_ARGS=(--speculative-config "$${SPEC_CONFIG}")
+        fi
+        cd /
+        exec /opt/venv/bin/python -m vllm.entrypoints.cli.main serve "$${MODEL}" \
+          --served-model-name "$${SERVED_MODEL_NAME}" \
+          --trust-remote-code \
+          --host 0.0.0.0 \
+          --port "$${PORT}" \
+          --tensor-parallel-size "$${TP_SIZE}" \
+          --pipeline-parallel-size 1 \
+          --decode-context-parallel-size "$${DCP_SIZE}" \
+          --dcp-comm-backend ag_rs \
+          --dcp-kv-cache-interleave-size 1 \
+          --enable-chunked-prefill \
+          --enable-prefix-caching \
+          --load-format fastsafetensors \
+          --async-scheduling \
+          --gpu-memory-utilization "$${GPU_MEMORY_UTILIZATION}" \
+          --max-num-batched-tokens "$${MAX_NUM_BATCHED_TOKENS}" \
+          --max-num-seqs "$${MAX_NUM_SEQS}" \
+          --max-cudagraph-capture-size "$${MAX_CUDAGRAPH_CAPTURE_SIZE}" \
+          --kv-cache-dtype fp8 \
+          --block-size 128 \
+          --attention-backend B12X_MLA_SPARSE \
+          --linear-backend b12x \
+          --moe-backend flashinfer_cutlass_afp8 \
+          --hf-overrides "$${HF_OVERRIDES}" \
+          -cc.pass_config.fuse_allreduce_rms=True \
+          "$${SPEC_ARGS[@]}"
+```
+
+## Runtime Validation Checklist
+
+After starting the native image, confirm the logs contain the expected path:
+
+```bash
+docker logs glm51-native-mxfp4 2>&1 | rg "Mxfp4|MXFP4|FlashInfer|SwiGLU|model_type|B12X_MLA"
+```
+
+The important signals are:
+
+```text
+model_type=glm_moe_dsa
+Using 'FLASHINFER_CUTLASS_MXFP4_MXFP8' Mxfp4 MoE backend
+Using GLM contiguous w13 layout
+Using standard SwiGLU parameters
+Using V2 Model Runner
+Using AttentionBackendEnum.B12X_MLA_SPARSE backend
+```
+
+Basic smoke:
+
+```bash
+python3 /mnt/test.py --port 5329 -L
+python3 /root/llm-inference-bench/llm_decode_bench.py \
+  --port 5329 \
+  --concurrency 1 \
+  --contexts 0k \
+  --max-tokens 512 \
+  --skip-prefill
+```
+
+## Previous Runtime State
+
+The older working runtime used Quark metadata plus overlays for activation
+override, index filtering, GLM w13 layout, zero MoE biases, and standard GLM
+SwiGLU. That was useful for proving the tensor path, but it should not be the
+long-term reproduction target.
+
+The native branch/image folds the GLM w13 layout and SwiGLU fixes into vLLM and
+uses a clean standalone checkpoint. It should not need Quark runtime config or
+the exact-index loader overlay.
