@@ -468,3 +468,168 @@ long-term reproduction target.
 The native branch/image folds the GLM w13 layout and SwiGLU fixes into vLLM and
 uses a clean standalone checkpoint. It should not need Quark runtime config or
 the exact-index loader overlay.
+
+## Lucifer FlashInfer Cutlass Runtime
+
+Status: validated on 2026-06-10 as a Lucifer overlay smoke run. This is not the
+same attention path as the B12X GLM runtime above. Lucifer's DS4 sparse MLA
+backend currently rejects GLM's sparse/indexer shape, so the working GLM path
+uses a dense MLA fallback plus FlashInfer Cutlass MXFP4xMXFP8 MoE.
+
+Lucifer image:
+
+```text
+voipmonitor/vllm:lucifer-glm51-mxfp4-densemla-bbbb9fc-cu132-20260610
+```
+
+Lucifer image digest:
+
+```text
+sha256:3b6806ca1a38352cb0b0549cc23ae8a88c5d54f6c0042080d0b35f647b44eafb
+```
+
+Lucifer vLLM branch:
+
+```text
+https://github.com/local-inference-lab/vllm/tree/codex/lucifer-glm51-mxfp4-20260610
+```
+
+Lucifer vLLM commit:
+
+```text
+bbbb9fc3b32f99c1fa6f17cf5c497d3f89a86682
+```
+
+Base Lucifer image:
+
+```text
+voipmonitor/vllm:lucifer
+voipmonitor/vllm:lucifer-vllm7c6bbf4-fi3395b41aa8d-dg324aced12c-tk9801a7-cu132-20260609
+sha256:76f5f2cb4942d5b175908192ac07be81df077fe28cd5d3f8c7c92611895e14d4
+```
+
+Additional Lucifer changes compared with the native B12X overlay:
+
+| File | Purpose |
+|---|---|
+| `vllm/model_executor/models/deepseek_v2.py` | Add env-gated `VLLM_GLM_FORCE_DENSE_MLA=1` fallback so GLM can bypass Lucifer sparse MLA/indexer modules; skip sparse indexer checkpoint tensors in this dense mode. |
+| `vllm/v1/attention/ops/triton_decode_attention.py` | Use `num_stages=1` for dense GLM MLA decode with effective QK dim 576 to stay under Blackwell shared-memory limits during CUDA graph capture. |
+
+Why this is necessary:
+
+```text
+SPARSE_MLA_SM120 is DS4-oriented in Lucifer and rejects GLM head_size=576 /
+GLM sparse-indexer assumptions. Without the dense fallback the selector cannot
+find a valid attention backend. With dense fallback, TRITON_MLA works, but needs
+the num_stages=1 shared-memory fix for CUDA graph capture.
+```
+
+Overlay Dockerfile:
+
+```Dockerfile
+FROM voipmonitor/vllm:lucifer
+
+LABEL org.opencontainers.image.title="GLM-5.1 native MXFP4 Lucifer dense-MLA overlay"
+LABEL org.opencontainers.image.source="https://github.com/local-inference-lab/vllm/tree/codex/lucifer-glm51-mxfp4-20260610"
+LABEL org.opencontainers.image.revision="bbbb9fc3b32f99c1fa6f17cf5c497d3f89a86682"
+LABEL org.opencontainers.image.base.name="voipmonitor/vllm:lucifer"
+
+COPY vllm/model_executor/models/deepseek_v2.py /opt/venv/lib/python3.12/site-packages/vllm/model_executor/models/deepseek_v2.py
+COPY vllm/model_executor/layers/quantization/mxfp4.py /opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/mxfp4.py
+COPY vllm/model_executor/layers/fused_moe/oracle/mxfp4.py /opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/oracle/mxfp4.py
+COPY vllm/model_executor/layers/fused_moe/experts/flashinfer_cutlass_moe.py /opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/experts/flashinfer_cutlass_moe.py
+COPY vllm/v1/attention/ops/triton_decode_attention.py /opt/venv/lib/python3.12/site-packages/vllm/v1/attention/ops/triton_decode_attention.py
+```
+
+Build and push:
+
+```bash
+docker build \
+  -f /root/vllm/build/lucifer-glm51-mxfp4-densemla-bbbb9fc/Dockerfile \
+  -t voipmonitor/vllm:lucifer-glm51-mxfp4-densemla-bbbb9fc-cu132-20260610 \
+  /root/vllm/worktrees/vllm-lucifer-glm51-mxfp4-20260610
+
+docker push voipmonitor/vllm:lucifer-glm51-mxfp4-densemla-bbbb9fc-cu132-20260610
+```
+
+Validated smoke launch. This was intentionally small-context validation
+(`--max-model-len 4096`, `--max-num-seqs 8`) to prove the Lucifer
+FlashInfer-Cutlass MoE path and CUDA graph capture.
+
+```bash
+docker run -d --name glm51-lucifer-mxfp4 \
+  --gpus all --runtime nvidia --ipc host --shm-size 32g --network host \
+  --ulimit memlock=-1 --ulimit stack=67108864 \
+  -v /mnt:/mnt \
+  -v /cache:/cache \
+  -v /root/.cache/huggingface:/root/.cache/huggingface \
+  -v /root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610:/model:ro \
+  -e CUDA_VISIBLE_DEVICES=8,9,10,11,12,13,14,15 \
+  -e CUDA_DEVICE_ORDER=PCI_BUS_ID \
+  -e CUDA_DEVICE_MAX_CONNECTIONS=32 \
+  -e OMP_NUM_THREADS=16 \
+  -e CUTE_DSL_ARCH=sm_120a \
+  -e NCCL_IB_DISABLE=1 \
+  -e NCCL_P2P_LEVEL=SYS \
+  -e NCCL_PROTO=LL,LL128,Simple \
+  -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+  -e SAFETENSORS_FAST_GPU=1 \
+  -e VLLM_WORKER_MULTIPROC_METHOD=spawn \
+  -e VLLM_USE_AOT_COMPILE=1 \
+  -e VLLM_USE_BREAKABLE_CUDAGRAPH=0 \
+  -e VLLM_USE_MEGA_AOT_ARTIFACT=1 \
+  -e VLLM_USE_FLASHINFER_SAMPLER=1 \
+  -e VLLM_USE_V2_MODEL_RUNNER=1 \
+  -e VLLM_GLM_FORCE_DENSE_MLA=1 \
+  voipmonitor/vllm:lucifer-glm51-mxfp4-densemla-bbbb9fc-cu132-20260610 \
+  /bin/bash -lc 'set -euo pipefail; unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS VLLM_ENABLE_PCIE_ALLREDUCE VLLM_PCIE_ALLREDUCE_BACKEND VLLM_CPP_AR_1STAGE_NCCL_CUTOFF VLLM_CPP_AR_IGNORE_CUTOFF_MAX_ROWS VLLM_RTX6K_FUSED_ALLREDUCE_ADD VLLM_RTX6K_FUSED_ALLREDUCE_ADD_END_BARRIER VLLM_CACHE_DIR; exec vllm serve /model \
+    --served-model-name GLM-5.1-MXFP4-NATIVE-LUCIFER \
+    --trust-remote-code \
+    --host 0.0.0.0 \
+    --port 5331 \
+    --load-format fastsafetensors \
+    --tensor-parallel-size 8 \
+    --kv-cache-dtype fp8 \
+    --block-size 256 \
+    --gpu-memory-utilization 0.90 \
+    --max-model-len 4096 \
+    --max-num-seqs 8 \
+    --max-num-batched-tokens 8192 \
+    --max-cudagraph-capture-size 64 \
+    --compilation-config="{\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"custom_ops\":[\"all\"]}" \
+    --async-scheduling \
+    --no-scheduler-reserve-full-isl \
+    --enable-chunked-prefill \
+    --enable-flashinfer-autotune \
+    --enable-prefix-caching \
+    --kernel-config.moe_backend flashinfer_cutlass'
+```
+
+Expected log signals:
+
+```text
+Forcing dense MLA for GLM because VLLM_GLM_FORCE_DENSE_MLA=1.
+Using TRITON_MLA attention backend
+Using FLASH_ATTN MLA prefill backend
+Using native MXFP4 MoE method for model_type=glm_moe_dsa.
+Using 'FLASHINFER_CUTLASS_MXFP4_MXFP8' Mxfp4 MoE backend.
+Using contiguous w13 layout for FlashInfer Cutlass MXFP4 MoE.
+Using standard SwiGLU parameters for FlashInfer MXFP4 MoE (model_type=glm_moe_dsa).
+Graph capturing finished
+Starting vLLM server on http://0.0.0.0:5331
+```
+
+Validated smoke result:
+
+| Test | Result |
+|---|---|
+| `/v1/models` | `GLM-5.1-MXFP4-NATIVE-LUCIFER`, `max_model_len=4096` |
+| KV cache budget | `746,496` tokens, `2916` blocks × `256` |
+| `python3 /mnt/test.py --port 5331 -L` | first iteration completed, `1892` completion tokens, `0` CJK characters |
+| Smoke generation-only speed | `64.14 tok/s` |
+| `llm_decode_bench.py --port 5331 --concurrency 1 --contexts 0k --max-tokens 256 --skip-prefill` | `65.2 tok/s`, TTFT/ITL `84/15 ms` |
+
+Open item: this proves Lucifer compatibility for the checkpoint and
+FlashInfer-Cutlass MXFP4 MoE, but it is still a dense attention fallback. A
+proper performance path would need a GLM-compatible Lucifer sparse MLA backend
+instead of forcing dense MLA.
