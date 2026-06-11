@@ -13,12 +13,6 @@ the old Quark/index-filter runtime overlays.
 Use this checkpoint:
 
 ```text
-/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610
-```
-
-Hugging Face checkpoint:
-
-```text
 https://huggingface.co/festr2/GLM-5.1-MXFP4-Hybrid-Native-20260610
 ```
 
@@ -81,16 +75,16 @@ The compose entrypoint intentionally unsets NCCL_GRAPH_FILE and NCCL_GRAPH_DUMP_
 
 ## Final Artifacts
 
-Checkpoint:
-
-```text
-/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610
-```
-
 Hugging Face checkpoint:
 
 ```text
 https://huggingface.co/festr2/GLM-5.1-MXFP4-Hybrid-Native-20260610
+```
+
+Local build/source checkpoint path:
+
+```text
+/root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610
 ```
 
 Docker image:
