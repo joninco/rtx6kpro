@@ -16,6 +16,12 @@ Use this checkpoint:
 /root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610
 ```
 
+Hugging Face checkpoint:
+
+```text
+https://huggingface.co/festr2/GLM-5.1-MXFP4-Hybrid-Native-20260610
+```
+
 Use this image:
 
 ```text
@@ -79,6 +85,12 @@ Checkpoint:
 
 ```text
 /root/kld/checkpoints/GLM-5.1-LukeNVFP4-MTP-AMD-MXFP4-Routed-W4A4AsMXFP8-NativeMXFP4-20260610
+```
+
+Hugging Face checkpoint:
+
+```text
+https://huggingface.co/festr2/GLM-5.1-MXFP4-Hybrid-Native-20260610
 ```
 
 Docker image:
