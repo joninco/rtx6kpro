@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-12](2026-06/2026-06-12.md) | DFlash cracked in vLLM — Festr solved vLLM dflash with help from mythos; MiMo Pro 2.5 (1T model) n |
 | [2026-06-11](2026-06/2026-06-11.md) | DS4F empty-response bug confirmed reproducible: Model occasionally skips closing `</think>` tag, ret |
 | [2026-06-10](2026-06/2026-06-10.md) | CUDA 13.3 released — fixes critical WGMMA data race bug causing silent result corruption in B12X N |
 | [2026-06-09](2026-06/2026-06-09.md) | New Lucifer Docker image `hg436/vllm-public:lucifer-9d9a0a0` released: vLLM main + FlashInfer #3395  |
@@ -113,6 +114,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-12](2026-06/2026-06-12.md) | DFlash cracked in vLLM — Festr solved vLLM dflash with help from mythos; MiMo Pro 2.5 (1T model) n |
 | [2026-06-11](2026-06/2026-06-11.md) | DS4F empty-response bug confirmed reproducible: Model occasionally skips closing `</think>` tag, ret |
 | [2026-06-10](2026-06/2026-06-10.md) | CUDA 13.3 released — fixes critical WGMMA data race bug causing silent result corruption in B12X N |
 | [2026-06-09](2026-06/2026-06-09.md) | New Lucifer Docker image `hg436/vllm-public:lucifer-9d9a0a0` released: vLLM main + FlashInfer #3395  |
