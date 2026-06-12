@@ -341,3 +341,79 @@ docker run -d \
   baseline.
 - Speculative decoding is intentionally disabled until a matching K2.7-Code
   draft/speculator model is selected and validated.
+
+## Required Long-Context Fixes
+
+Two vLLM fixes are required for correct DCP and long-context behaviour on
+this image. Both are open against `dev/chthonic-consecration` and are NOT in
+the pinned image; the sweep below ran with the fixed
+`vllm/model_executor/layers/attention/mla_attention.py` bind-mounted over the
+image.
+
+| Fix | PR | Symptom without it |
+|---|---|---|
+| MLA DCP fp8 KV gather | [local-inference-lab/vllm#14](https://github.com/local-inference-lab/vllm/pull/14) | any DCP>1 chunked-context prefill crashes (`cp_gather_cache ... same dtype`) |
+| MLA chunked-context merge strides | [local-inference-lab/vllm#15](https://github.com/local-inference-lab/vllm/pull/15) | every prompt above ~64k context tokens silently generates garbage (any DCP incl. 1; dense-MLA models only — sparse-MLA DS4 is unaffected) |
+
+PR #15 also means dense-MLA quality/acceptance measurements taken on Black
+Benediction images before 2026-06-12 with >64k-token contexts were generated
+from corrupted prefill (throughput numbers remain valid).
+
+## DCP Decode Sweep (2026-06-12)
+
+Target-only (no speculative decoding), `GPU_MEM=0.94`, fresh container per
+DCP value, PR #14 + #15 fixes mounted, otherwise the launch from this page.
+Same methodology as the Kimi-K2.6 v8 sweep:
+
+```bash
+python3 /root/llm-inference-bench/llm_decode_bench.py \
+  --host 127.0.0.1 --port 8402 --model Kimi-K2.7-Code \
+  --concurrency 1,32 --contexts 0,128k --duration 30 \
+  --skip-prefill --max-tokens 8192 --temperature 0 \
+  --kv-budget <server KV tokens> --dcp-size <DCP> \
+  --display-mode plain --no-hw-monitor \
+  --output /root/bench-results/kimi-k27-dcp-sweep-20260612/dcp<DCP>/result.json
+```
+
+`∅` means the cell did not fit in the server KV cache and was skipped by the
+benchmark (32 x 128k+8k > KV budget at every DCP).
+
+| DCP | GPU mem | KV cache tokens | 0/c1 tok/s | 0/c32 tok/s | 128k/c1 tok/s | 128k/c32 tok/s | errors |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0.94 | 468,368 | 96.3 | 1,178.3 | 50.0 | ∅ | 0 |
+| 2 | 0.94 | 936,864 | 85.4 | 1,035.8 | 59.3 | ∅ | 0 |
+| 4 | 0.94 | 1,873,728 | 82.1 | 967.1 | 59.9 | ∅ | 0 |
+| 8 | 0.94 | 3,747,456 | 86.3 | 835.5 | 69.9 | ∅ | 0 |
+
+Trends match the K2.6 v8 sweep: DCP costs ~10-14% short-context single-stream
+and batched throughput, and buys near-linear KV capacity plus +40% (DCP8)
+single-stream decode at 128k.
+
+Result JSONs:
+
+```text
+/root/bench-results/kimi-k27-dcp-sweep-20260612/
+```
+
+## 128k Coherence Validation (2026-06-12)
+
+Per-DCP, on the sweep servers right after the decode run: a ~135k-token
+prompt (cache-busted) with a needle on the first line, asking for the needle
+plus a two-sentence description of the document; temp 0, 220 max tokens.
+Checked: needle returned verbatim, unique-word ratio of the answer (degenerate
+repetition shows up as <0.5), and CJK character count.
+
+| DCP | prompt tokens | needle | uniq ratio | CJK | verdict |
+|---:|---:|:---:|---:|---:|---|
+| 1 | 134,789 | yes | 0.96 | 0 | coherent |
+| 2 | 134,791 | yes | 0.96 | 0 | coherent |
+| 4 | 134,790 | yes | 0.91 | 0 | coherent |
+| 8 | 134,789 | yes | 0.92 | 0 | coherent |
+
+All four answered in the same articulate form, e.g. DCP8:
+"OCELOT-7291. This document mostly consists of the sentence 'The quick brown
+fox jumps over the lazy dog' repeated many times. It appears to be a filler
+or placeholder text with a single secret code at the beginning."
+
+Without PR #15 the same probe fails for every prompt above ~65k tokens
+(needle lost, degenerate repetition) at every DCP value including 1.
