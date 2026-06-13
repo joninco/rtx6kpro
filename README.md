@@ -54,6 +54,7 @@ Community-sourced knowledge base for running large language models (Qwen3.5-397B
 - [Benchmark Results](benchmarks/results.md) — Consolidated tables across all models
 - [KLD Evaluation](benchmarks/kld-evaluation.md) — Quantization quality (KL divergence vs FP8 reference)
 - [Common Issues](troubleshooting/common-issues.md) — Errors + fixes
+- [DS4-Flash: empty `content` from unclosed `<think>`](models/ds4f-empty-think/README.md) — Model writes the answer inside the reasoning field (~0.3–0.8% of synthesis requests); self-contained repro, build/MTP/temperature-independent
 
 ## Key Findings
 
