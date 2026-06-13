@@ -23,6 +23,7 @@ Community-sourced knowledge base for running large language models (Qwen3.5-397B
 | [GLM-5.1](models/glm5.1/README.md) | MoE | — | 8× | vLLM b12x NSA/MTP port | [→](models/glm5.1/README.md) |
 
 ### Hardware & Topology
+- [SM120 vs. SM100 Architecture](hardware/sm120-vs-sm100-architecture.md) — 5th Gen Tensor Cores, tcgen05/TMEM, why the bottleneck is the software fork not the silicon
 - [PCIe Topology](hardware/topology.md) — Switches, Turin vs Genoa, NUMA
 - [PCIe Bandwidth](hardware/pcie-bandwidth.md) — P2P measurements, BAR1, latency
 - [GPU Configurations](hardware/gpu-configs.md) — 4×/8× builds, VRAM, power, rigs
