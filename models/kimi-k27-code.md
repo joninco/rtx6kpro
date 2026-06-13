@@ -417,3 +417,44 @@ or placeholder text with a single secret code at the beginning."
 
 Without PR #15 the same probe fails for every prompt above ~65k tokens
 (needle lost, degenerate repetition) at every DCP value including 1.
+
+## DCP + K2.6 DFlash Draft Decode Sweep (2026-06-13)
+
+Same sweep with the Kimi-K2.6 DFlash draft enabled
+(`SubSir/Kimi-K2.6-DFlash-tmp`, `num_speculative_tokens=7`,
+`attention_backend=TRITON_ATTN`), `GPU_MEM=0.90`. This required new vLLM
+support for running DFlash under DCP (the draft KV cache is replicated on
+every DCP rank instead of sharded; the draft's plain-attention backend
+cannot reduce partial attention across ranks). All four DCP values boot,
+pass the math smoke, and stay coherent at 128k.
+
+| DCP | 0/c1 tok/s | 0/c32 tok/s | 128k/c1 tok/s | server accept rate | vs target-only 0/c1 |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 132.1 | 950.1 | 63.5 | 0.242 | +37% (96.3) |
+| 2 | 91.6 | 660.9 | 29.8 | 0.081 | +7% (85.4) |
+| 4 | 65.5 | 440.1 | 22.9 | 0.027 | −20% (82.1) |
+| 8 | 54.1 | 275.9 | 29.5 | 0.038 | −37% (86.3) |
+
+The K2.6 draft is **foreign** to the K2.7-Code target (no matching K2.7
+DFlash export exists yet), so acceptance is low even at DCP1 (0.24) and
+falls sharply as DCP grows. DFlash is a net win only at DCP1 with this
+draft; at DCP≥4 it costs more than it saves. Generation stays correct at
+every DCP (128k needle retrieval passes, no degeneration) — only the
+speculative acceptance degrades. A native K2.7-Code draft would be needed
+before recommending DFlash with DCP for this target.
+
+128k coherence with DFlash (needle / unique-word ratio / CJK):
+
+| DCP | needle | uniq ratio | CJK |
+|---:|:---:|---:|---:|
+| 1 | yes | 0.92 | 0 |
+| 2 | yes | 0.88 | 0 |
+| 4 | yes | 0.92 | 0 |
+| 8 | yes | 0.92 | 0 |
+
+Requires the DFlash-under-DCP vLLM change (`dcp_replicated` draft KV cache)
+on top of PR #14 and PR #15. Result JSONs:
+
+```text
+/root/bench-results/kimi-k27-dcp-dflash-sweep-20260613/
+```
