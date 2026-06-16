@@ -431,15 +431,16 @@ python3 /mnt/test.py --port 5329 -L
 Decode matrix:
 
 ```bash
+KV_BUDGET=2600000  # TP4 full C1-C64 guard; use 600000 for TP2.
 python3 /root/llm-inference-bench/llm_decode_bench.py \
   --port 5329 \
   --concurrency 1,2,4,8,16,32,64 \
   --contexts 0k \
   --duration 30 \
-  --max-tokens 2048 \
+  --kv-budget "$KV_BUDGET" \
   --skip-prefill \
   --display-mode plain \
-  --output /root/bench-results/ds4-chthonic-v4-20260615/decode.json
+  --output /root/bench-results/ds4-chthonic-v4-gpu0-rerun-20260616/decode.json
 ```
 
 Prefill matrix:
@@ -451,69 +452,52 @@ python3 /root/llm-inference-bench/llm_decode_bench.py \
   --prefill-contexts 8k,64k \
   --prefill-duration 30 \
   --display-mode plain \
-  --output /root/bench-results/ds4-chthonic-v4-20260615/prefill.json
+  --output /root/bench-results/ds4-chthonic-v4-gpu0-rerun-20260616/prefill.json
 ```
 
 ## Chthonic B12X v4 Speed
 
-The v4 B12X speed rerun uses the new chthonic image, the B12X launch recipe
-above, `VLLM_PREFIX_CACHE_RETENTION_INTERVAL=4096`, and
-`llm_decode_bench.py --max-tokens 2048`. The speed-matrix launches used
+The v4 B12X speed rerun uses the chthonic image, the B12X launch recipe above,
+and `VLLM_PREFIX_CACHE_RETENTION_INTERVAL=4096`. To avoid GPU-group bias, each
+row was measured as one isolated server at a time, always starting from GPU0:
+TP2 used GPUs `0,1`; TP4 used GPUs `0,1,2,3`. No explicit generation-token
+override was passed; `llm_decode_bench.py v0.4.24` used its default `8192`. The manual
+`--kv-budget` is only a client-side skip-guard override for this benchmark and
+does not change the server configuration. The speed-matrix launches used
 `MAX_MODEL_LEN=130000`; therefore the 128k prefill cell is marked `cap` because
-the benchmark's 128k prompt targets about 131k tokens. Use
-`MAX_MODEL_LEN=262144` for a true 128k-prefill rerun.
+the benchmark's 128k prompt targets about 131k tokens. Use `MAX_MODEL_LEN=262144`
+for a true 128k-prefill rerun.
 
-Decode results are appended after the local rerun:
+Decode results:
 
 | TP | MTP | Draft sampling | C1 | C2 | C4 | C8 | C16 | C32 | C64 | Accept avg |
 |---:|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| TP2 | off | none | 131.0 | 218.8 | 361.2 | 543.1 | 792.1 | 1,117.4 | 1,553.3 | 0.000 |
-| TP2 | on | probabilistic | 207.7 | 328.3 | 481.3 | 691.0 | 943.8 | 1,297.3 | 1,747.2 | 0.672 |
-| TP4 | off | none | 159.0 | 275.1 | 468.9 | 756.5 | 1,139.5 | 1,693.0 | 2,372.3 | 0.000 |
-| TP4 | on | probabilistic | 266.4 | 443.7 | 675.4 | 1,001.8 | 1,416.3 | 1,903.8 | 2,707.4 | 0.679 |
+| TP2 | off | none | 132.1 | 221.0 | 362.0 | 544.9 | 784.1 | 1,115.1 | 1,566.4 | 0.000 |
+| TP2 | on | probabilistic | 217.8 | 353.0 | 515.4 | 728.8 | 983.3 | 1,299.4 | 1,777.8 | 0.686 |
+| TP4 | off | none | 158.9 | 280.5 | 475.4 | 762.4 | 1,142.1 | 1,689.2 | 2,342.7 | 0.000 |
+| TP4 | on | probabilistic | 282.4 | 471.8 | 740.8 | 1,071.8 | 1,510.7 | 2,032.7 | 2,714.9 | 0.679 |
 
-Prefill results are appended after the local rerun:
+Prefill results:
 
 | TP | MTP | 8k tok/s | 64k tok/s | 128k tok/s |
 |---:|:---:|---:|---:|---:|
-| TP2 | off | 8,068 | 7,637 | cap |
-| TP2 | on | 7,909 | 7,463 | cap |
-| TP4 | off | 10,300 | 9,669 | cap |
-| TP4 | on | 9,681 | 9,105 | cap |
+| TP2 | off | 8,027 | 7,614 | cap |
+| TP2 | on | 7,826 | 7,411 | cap |
+| TP4 | off | 10,182 | 9,549 | cap |
+| TP4 | on | 9,877 | 9,279 | cap |
 
 Raw v4 result files:
 
 ```text
-/root/bench-results/ds4-chthonic-v4-20260615/tp2-nomtp-decode.json
-/root/bench-results/ds4-chthonic-v4-20260615/tp2-mtp-decode.json
-/root/bench-results/ds4-chthonic-v4-20260615/tp4-nomtp-decode.json
-/root/bench-results/ds4-chthonic-v4-20260615/tp4-mtp-decode.json
-/root/bench-results/ds4-chthonic-v4-20260615/tp2-nomtp-prefill.json
-/root/bench-results/ds4-chthonic-v4-20260615/tp2-mtp-prefill.json
-/root/bench-results/ds4-chthonic-v4-20260615/tp4-nomtp-prefill.json
-/root/bench-results/ds4-chthonic-v4-20260615/tp4-mtp-prefill.json
+/root/bench-results/ds4-chthonic-v4-gpu0-rerun-20260616/tp2-nomtp-decode.json
+/root/bench-results/ds4-chthonic-v4-gpu0-rerun-20260616/tp2-mtp-decode.json
+/root/bench-results/ds4-chthonic-v4-gpu0-rerun-20260616/tp4-nomtp-decode.json
+/root/bench-results/ds4-chthonic-v4-gpu0-rerun-20260616/tp4-mtp-decode.json
+/root/bench-results/ds4-chthonic-v4-gpu0-rerun-20260616/tp2-nomtp-prefill.json
+/root/bench-results/ds4-chthonic-v4-gpu0-rerun-20260616/tp2-mtp-prefill.json
+/root/bench-results/ds4-chthonic-v4-gpu0-rerun-20260616/tp4-nomtp-prefill.json
+/root/bench-results/ds4-chthonic-v4-gpu0-rerun-20260616/tp4-mtp-prefill.json
 ```
-
-## v3 Baseline Carried Forward
-
-Until the v4 sweep is filled in, these are the v3 B12X decode references from
-the previous black-benediction/PR11 image.
-
-| TP | MTP | Draft sampling | C1 | C2 | C4 | C8 | C16 | C32 | C64 | Accept avg |
-|---:|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| TP2 | off | none | 131.7 | 220.4 | 359.7 | 541.6 | 780.3 | 1,091.0 | 1,486.6 | 0.000 |
-| TP2 | on | probabilistic | 222.5 | 355.4 | 521.7 | 738.8 | 1,006.6 | 1,369.5 | 1,786.6 | 0.687 |
-| TP4 | off | none | 159.2 | 279.7 | 472.1 | 759.5 | 1,135.4 | 1,656.6 | 2,299.8 | 0.000 |
-| TP4 | on | probabilistic | 285.4 | 470.9 | 724.5 | 1,071.1 | 1,504.3 | 1,996.9 | 2,544.7 | 0.706 |
-
-Lucifer v3 references remain unchanged:
-
-| TP | MTP | Draft sampling | C1 | C2 | C4 | C8 | C16 | C32 | C64 |
-|---:|:---:|---|---:|---:|---:|---:|---:|---:|---:|
-| TP2 | off | none | 123.8 | 205.1 | 350.2 | 565.5 | 827.3 | 1,237.7 | 1,924.2 |
-| TP2 | on | probabilistic | 207.1 | 346.4 | 400.4 | 787.1 | 1,153.1 | 1,796.3 | 2,752.5 |
-| TP4 | off | none | 146.8 | 260.4 | 452.6 | 745.7 | 1,178.8 | 1,809.8 | 2,739.4 |
-| TP4 | on | probabilistic | 257.2 | 439.8 | 583.4 | 1,129.2 | 1,707.6 | 2,686.7 | 3,932.4 |
 
 ## Notes
 
