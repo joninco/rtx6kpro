@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-17](2026-06/2026-06-17.md) | GLM-5.2 released by zai-org: new IndexShare architecture (mandatory in 5.2, was experimental in 5.1) |
 | [2026-06-16](2026-06/2026-06-16.md) | b12x decode speed regression fixed — a Codex-introduced bug in `expected_m` kernel selection cause |
 | [2026-06-15](2026-06/2026-06-15.md) | Fable 5 scores 99.1% on Aider (223/225 after retry, 86.7% first-pass); Kimi K2.7 scores 91.6% for co |
 | [2026-06-14](2026-06/2026-06-14.md) | KV cache bug: `VLLM_PREFIX_CACHE_RETENTION_INTERVAL` must be set in vLLM or usable KV cache tops out |
@@ -118,6 +119,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-17](2026-06/2026-06-17.md) | GLM-5.2 released by zai-org: new IndexShare architecture (mandatory in 5.2, was experimental in 5.1) |
 | [2026-06-16](2026-06/2026-06-16.md) | b12x decode speed regression fixed — a Codex-introduced bug in `expected_m` kernel selection cause |
 | [2026-06-15](2026-06/2026-06-15.md) | Fable 5 scores 99.1% on Aider (223/225 after retry, 86.7% first-pass); Kimi K2.7 scores 91.6% for co |
 | [2026-06-14](2026-06/2026-06-14.md) | KV cache bug: `VLLM_PREFIX_CACHE_RETENTION_INTERVAL` must be set in vLLM or usable KV cache tops out |
