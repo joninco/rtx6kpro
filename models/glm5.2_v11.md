@@ -453,7 +453,7 @@ started with:
 ```text
 KV cache: 2,060,543 tokens
 Maximum concurrency for 256,000 tokens per request: 8.05x
-Graph capture finished in 132s, took 1.23 GiB
+Graph capture finished in 119s, took 1.23 GiB
 ```
 
 Smoke command:
@@ -462,4 +462,5 @@ Smoke command:
 timeout 90 python3 /mnt/test.py --port 5329 -L -c 512
 ```
 
-Result: 4 iterations before timeout, coherent output, no CJK watchdog hit.
+Result: 6 iterations before timeout, coherent output, no CJK watchdog hit.
+Generation-only throughput was about `63-65 tok/s`.
