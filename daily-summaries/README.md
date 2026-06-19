@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-19](2026-06/2026-06-19.md) | GLM-5.2 NVFP4 on TP8 benchmarks: prefill 2,684 tok/s @ 8k ctx, 1,824 tok/s @ 128k ctx (200W power-li |
 | [2026-06-18](2026-06/2026-06-18.md) | GLM-5.2 NVFP4 quant by luke uploaded (`lukealonso/GLM-5.2-NVFP4`); Aider benchmark shows pass_rate_1 |
 | [2026-06-17](2026-06/2026-06-17.md) | GLM-5.2 released by zai-org: new IndexShare architecture (mandatory in 5.2, was experimental in 5.1) |
 | [2026-06-16](2026-06/2026-06-16.md) | b12x decode speed regression fixed — a Codex-introduced bug in `expected_m` kernel selection cause |
@@ -120,6 +121,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-19](2026-06/2026-06-19.md) | GLM-5.2 NVFP4 on TP8 benchmarks: prefill 2,684 tok/s @ 8k ctx, 1,824 tok/s @ 128k ctx (200W power-li |
 | [2026-06-18](2026-06/2026-06-18.md) | GLM-5.2 NVFP4 quant by luke uploaded (`lukealonso/GLM-5.2-NVFP4`); Aider benchmark shows pass_rate_1 |
 | [2026-06-17](2026-06/2026-06-17.md) | GLM-5.2 released by zai-org: new IndexShare architecture (mandatory in 5.2, was experimental in 5.1) |
 | [2026-06-16](2026-06/2026-06-16.md) | b12x decode speed regression fixed — a Codex-introduced bug in `expected_m` kernel selection cause |
