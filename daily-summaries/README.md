@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-21](2026-06/2026-06-21.md) | GLM-5.2 REAP 504B aider polyglot benchmark: `pass_rate_2: 78.7` at "High" reasoning effort (225 test |
 | [2026-06-20](2026-06/2026-06-20.md) | GLM 5.2 DCP+MTP root cause fixed: MTP layers were replicated per DCP rank instead of sharded, breaki |
 | [2026-06-19](2026-06/2026-06-19.md) | GLM-5.2 NVFP4 on TP8 benchmarks: prefill 2,684 tok/s @ 8k ctx, 1,824 tok/s @ 128k ctx (200W power-li |
 | [2026-06-18](2026-06/2026-06-18.md) | GLM-5.2 NVFP4 quant by luke uploaded (`lukealonso/GLM-5.2-NVFP4`); Aider benchmark shows pass_rate_1 |
@@ -122,6 +123,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-21](2026-06/2026-06-21.md) | GLM-5.2 REAP 504B aider polyglot benchmark: `pass_rate_2: 78.7` at "High" reasoning effort (225 test |
 | [2026-06-20](2026-06/2026-06-20.md) | GLM 5.2 DCP+MTP root cause fixed: MTP layers were replicated per DCP rank instead of sharded, breaki |
 | [2026-06-19](2026-06/2026-06-19.md) | GLM-5.2 NVFP4 on TP8 benchmarks: prefill 2,684 tok/s @ 8k ctx, 1,824 tok/s @ 128k ctx (200W power-li |
 | [2026-06-18](2026-06/2026-06-18.md) | GLM-5.2 NVFP4 quant by luke uploaded (`lukealonso/GLM-5.2-NVFP4`); Aider benchmark shows pass_rate_1 |
