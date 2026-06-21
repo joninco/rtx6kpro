@@ -1,90 +1,47 @@
-# GLM-5.2 v12 NVFP4 on Dark Devotion
+# GLM-5.2 v12 NVFP4 / B12X Dark Devotion
 
-Measured and packaged on 2026-06-21 on the local 16x RTX PRO 6000
-Blackwell host.
-
-This page records the production GLM-5.2 v12 Docker image built from
-`dev/dark-devotion` plus the GLM DCP global-top-k MTP fix from PR #31. The
-main served profile is Luke's NVFP4 checkpoint with B12X MLA sparse attention,
-B12X NvFP4 MoE forced to A16, FP8 KV cache, TP8, DCP4, and MTP3.
+This page documents the reproducible GLM-5.2 NVFP4 serving stack built from
+`local-inference-lab/vllm dev/dark-devotion` with the DCP global-top-k MTP fix
+from PR #31. The intended default runtime is TP8 with DCP selectable at launch,
+B12X sparse MLA attention, B12X NvFP4 MoE forced to A16, FP8 KV cache, and MTP3.
 
 ## Image
 
 ```text
 voipmonitor/vllm:glm52-dark-devotion-pr31-dcpglobaltopk-mtp-cu132-20260621
-```
-
-Local image ID:
-
-```text
-sha256:f4917f67150958d18edf38ee2a5d36205075c1eac025d13d506e271e83ba370e
-```
-
-Pinned digest:
-
-```text
 voipmonitor/vllm@sha256:de96648aeade8a8189b3614d15d3bdec98f21dce3b3dc239262db5d06c52fc2e
 ```
 
-Relevant source state:
+Verified package versions:
 
-| Component | Revision |
+| Component | Version / revision |
 |---|---|
-| CUDA runtime | `13.2.1` |
-| cuBLAS runtime | `13.4.1.2` |
-| NCCL local library | `2.30.4`, loaded via `/opt/libnccl-local-inference.so.2.30.4` |
+| vLLM package | `0.11.2.dev279+dark.devotion.df8ad3b.b12x5af873a.fi9c5ed7c.dcpglobaltopk.mtptopkscores.cu132.20260621` |
+| vLLM base | `local-inference-lab/vllm dev/dark-devotion @ df8ad3b202c84937a23cfa9d93f7a3677da8ecde` |
+| vLLM fix | PR #31, `000807e2b0e33277ac6b3ae51ae2e52d8472c9ab` |
+| B12X | `lukealonso/b12x master @ 5af873a7b6c81fbf533ef96bede13fbf4744ad2a` |
+| FlashInfer | `9c5ed7c194e7412780862491742fc655daaad6ac` |
 | PyTorch | `2.12.0+cu132` |
-| FlashInfer | `0.6.13+cu132` |
-| vLLM base branch | `local-inference-lab/vllm dev/dark-devotion` |
-| vLLM build base commit | `df8ad3b202c84937a23cfa9d93f7a3677da8ecde` |
-| vLLM serving fix | PR #31, `000807e2b0e33277ac6b3ae51ae2e52d8472c9ab` |
-| B12X branch | `lukealonso/b12x master` |
-| B12X commit | `5af873a7b6c81fbf533ef96bede13fbf4744ad2a` |
-| FlashInfer commit | `9c5ed7c194e7412780862491742fc655daaad6ac` |
-| Docker build repo | `local-inference-lab/blackwell-llm-docker` |
+| CUDA / cuBLAS | CUDA `13.2.x`, cuBLAS runtime `13.4.1.2` |
+| NCCL | local inference NCCL `2.30.4` |
 
-The image verifies:
-
-```text
-vllm 0.11.2.dev279+dark.devotion.df8ad3b.b12x5af873a.fi9c5ed7c.dcpglobaltopk.mtptopkscores.cu132.20260621
-torch 2.12.0+cu132
-flashinfer 0.6.13+cu132
-deepseek_mtp.py includes topk_scores_buffer for B12X DCP global-top-k
-```
-
-## What Changed
-
-The current `dev/dark-devotion` stack already contains the B12X global top-k
-sparse-indexer path. PR #31 adds the missing MTP-side support required to use
-that path under DCP:
-
-```text
-https://github.com/local-inference-lab/vllm/pull/31
-```
-
-Runtime behavior:
-
-| Setting | Status |
-|---|---|
-| `VLLM_DCP_GLOBAL_TOPK` | Defaults to enabled in code. Set to `1` explicitly in the recipe for reproducibility. |
-| `VLLM_DCP_SHARD_DRAFT` | Must be set to `1`. This shards MTP draft KV/metadata for DCP instead of replicating it. |
-| Sparse indexer | `VLLM_USE_B12X_SPARSE_INDEXER=1`, using B12X global top-k. |
-| MoE | `--moe-backend b12x` with `B12X_MOE_FORCE_A16=1`. |
-| CUDA graphs | Enabled, no `--enforce-eager`. |
-
-vLLM prints these variables as "unknown environment variable" because they are
-read directly by the GLM/DCP code paths rather than through the central env
-registry. That warning is expected for this image.
+The image is a clean Docker build, not a runtime overlay.
 
 ## Docker Build
 
-Build script:
+Build repository:
+
+```text
+https://github.com/local-inference-lab/blackwell-llm-docker
+```
+
+Build script used:
 
 ```text
 /root/vllm/blackwell-llm-docker/build-dark-devotion-cu132.sh
 ```
 
-Build command used:
+Exact build invocation:
 
 ```bash
 cd /root/vllm/blackwell-llm-docker
@@ -105,11 +62,7 @@ VLLM_PATCH_URL=http://172.17.0.1:8199/0001-dark-devotion-mtp-topk-scores-b12x-dc
 VLLM_PATCH_SHA256=8231580f5c7cd8a9f17508058a818f4809a2a3dbff49e3b4a1014b4d634df504 \
 VLLM_BUILD_VERSION=0.11.2.dev279+dark.devotion.df8ad3b.b12x5af873a.fi9c5ed7c.dcpglobaltopk.mtptopkscores.cu132.20260621 \
 ./build-dark-devotion-cu132.sh
-```
 
-Then tag the production image:
-
-```bash
 docker tag \
   voipmonitor/vllm:dark-devotion-df8ad3b-b12x5af873a-mtptopkscores-cu132-20260621 \
   voipmonitor/vllm:glm52-dark-devotion-pr31-dcpglobaltopk-mtp-cu132-20260621
@@ -117,32 +70,61 @@ docker tag \
 
 ## Model
 
-Luke NVFP4 checkpoint:
+Default checkpoint:
 
 ```text
+lukealonso/GLM-5.2-NVFP4
 /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522
 ```
 
-Required GLM-5.2 index-cache override:
+GLM-5.2 requires the index cache sparsity override until upstream vLLM picks the
+pattern from model config:
 
 ```json
-{"use_index_cache":true,"index_topk_pattern":"FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS"}
+{"use_index_cache": true, "index_topk_pattern": "FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS"}
 ```
 
-## Production DCP4 MTP3
+## Runtime Defaults
 
-This is the production profile intended for user testing. It uses TP8/DCP4,
-MTP3, `max_num_seqs=32`, and graph capture size `128`.
+These are the important switches:
+
+| Setting | Value |
+|---|---|
+| `--attention-backend` | `B12X_MLA_SPARSE` |
+| `--moe-backend` | `b12x` |
+| `--quantization` | `modelopt_fp4` |
+| `--kv-cache-dtype` | `fp8` |
+| `B12X_MOE_FORCE_A16` | `1` |
+| `B12X_W4A16_TC_DECODE` | `1` |
+| `VLLM_USE_B12X_SPARSE_INDEXER` | `1` |
+| `VLLM_DCP_GLOBAL_TOPK` | `1` |
+| `VLLM_DCP_SHARD_DRAFT` | `1` |
+| `MTP` default | `3`, probabilistic draft sampling |
+| DCP default | choose `1`, `2`, `4`, or `8` at launch |
+
+`VLLM_DCP_GLOBAL_TOPK=1` is default in this code path, but it is set explicitly
+below for reproducibility. The top-k path is global across DCP ranks and uses
+the B12X sparse indexer. `VLLM_DCP_SHARD_DRAFT=1` is required so MTP draft KV is
+not replicated per DCP rank.
+
+Do not set `NCCL_GRAPH_FILE` to an empty string. If no XML topology file is
+used, unset it before starting vLLM.
+
+## Docker Compose
+
+This compose file is parameterized. Change `DCP_SIZE` and `MTP_TOKENS` without
+editing the command.
 
 ```yaml
 services:
   glm52:
-    image: voipmonitor/vllm:glm52-dark-devotion-pr31-dcpglobaltopk-mtp-cu132-20260621
-    container_name: glm52-v12-dcp4-mtp3
+    image: ${IMAGE:-voipmonitor/vllm:glm52-dark-devotion-pr31-dcpglobaltopk-mtp-cu132-20260621}
+    container_name: ${NAME:-glm52-v12}
     network_mode: host
     ipc: host
     shm_size: 32g
     gpus: all
+    init: true
     ulimits:
       memlock:
         soft: -1
@@ -152,10 +134,10 @@ services:
         hard: 1048576
       stack: 67108864
     volumes:
-      - /root/.cache/huggingface:/root/.cache/huggingface
-      - /root/.cache/vllm-glm52-v12-dcp4:/cache
+      - ${HF_CACHE:-/root/.cache/huggingface}:/root/.cache/huggingface
+      - ${CACHE_ROOT:-/root/.cache/vllm-glm52-v12}:/cache
     environment:
-      CUDA_VISIBLE_DEVICES: "0,1,2,3,4,5,6,7"
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}
       CUDA_DEVICE_ORDER: PCI_BUS_ID
       CUDA_DEVICE_MAX_CONNECTIONS: "32"
       CUTE_DSL_ARCH: sm_120a
@@ -166,14 +148,18 @@ services:
       NCCL_P2P_LEVEL: SYS
       NCCL_PROTO: LL,LL128,Simple
       VLLM_WORKER_MULTIPROC_METHOD: spawn
-      VLLM_USE_V2_MODEL_RUNNER: "1"
+      VLLM_USE_AOT_COMPILE: "1"
+      VLLM_USE_BREAKABLE_CUDAGRAPH: "0"
+      VLLM_USE_MEGA_AOT_ARTIFACT: "1"
       VLLM_USE_FLASHINFER_SAMPLER: "1"
-      VLLM_USE_B12X_MOE: "1"
       VLLM_USE_B12X_FP8_GEMM: "1"
+      VLLM_USE_B12X_MOE: "1"
       VLLM_USE_B12X_SPARSE_INDEXER: "1"
+      VLLM_USE_V2_MODEL_RUNNER: "1"
       VLLM_ENABLE_PCIE_ALLREDUCE: "1"
       VLLM_PCIE_ALLREDUCE_BACKEND: b12x
       VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE: 64KB
+      USES_B12X: "True"
       B12X_DENSE_SPLITK_TURBO: "1"
       B12X_W4A16_TC_DECODE: "1"
       B12X_MOE_FORCE_A16: "1"
@@ -187,22 +173,37 @@ services:
       TORCHINDUCTOR_CACHE_DIR: /cache/jit/torchinductor
       FLASHINFER_WORKSPACE_BASE: /cache/jit/flashinfer
       XDG_CACHE_HOME: /cache/jit
+      MODEL: ${MODEL:-/root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522}
+      PORT: ${PORT:-5543}
+      TP_SIZE: ${TP_SIZE:-8}
+      DCP_SIZE: ${DCP_SIZE:-4}
+      MTP_TOKENS: ${MTP_TOKENS:-3}
+      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.88}
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-256000}
+      MAX_NUM_SEQS: ${MAX_NUM_SEQS:-32}
+      MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-8192}
+      MAX_CUDAGRAPH_CAPTURE_SIZE: ${MAX_CUDAGRAPH_CAPTURE_SIZE:-128}
+      GLM52_INDEX_TOPK_PATTERN: FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS
     command:
       - /bin/bash
       - -lc
       - |
         set -euo pipefail
         unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
-        exec /opt/venv/bin/python -m vllm.entrypoints.cli.main serve \
-          /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522 \
+        HF_OVERRIDES="$(printf '{"use_index_cache":true,"index_topk_pattern":"%s"}' "$$GLM52_INDEX_TOPK_PATTERN")"
+        SPEC_ARGS=""
+        if [ "$$MTP_TOKENS" != "0" ]; then
+          SPEC_ARGS="--speculative-config {\"model\":\"$$MODEL\",\"method\":\"mtp\",\"num_speculative_tokens\":$$MTP_TOKENS,\"moe_backend\":\"b12x\",\"draft_sample_method\":\"probabilistic\"}"
+        fi
+        exec /opt/venv/bin/python -m vllm.entrypoints.cli.main serve "$$MODEL" \
           --served-model-name GLM-5.2-NVFP4 \
           --trust-remote-code \
           --host 0.0.0.0 \
-          --port 5543 \
-          --tensor-parallel-size 8 \
+          --port "$$PORT" \
+          --tensor-parallel-size "$$TP_SIZE" \
           --pipeline-parallel-size 1 \
-          --max-model-len 256000 \
-          --decode-context-parallel-size 4 \
+          --max-model-len "$$MAX_MODEL_LEN" \
+          --decode-context-parallel-size "$$DCP_SIZE" \
           --dcp-comm-backend ag_rs \
           --dcp-kv-cache-interleave-size 1 \
           --enable-chunked-prefill \
@@ -210,54 +211,69 @@ services:
           --load-format fastsafetensors \
           --async-scheduling \
           -cc.pass_config.fuse_allreduce_rms=True \
-          --gpu-memory-utilization 0.88 \
-          --max-num-batched-tokens 8192 \
-          --max-num-seqs 32 \
-          --max-cudagraph-capture-size 128 \
+          --gpu-memory-utilization "$$GPU_MEMORY_UTILIZATION" \
+          --max-num-batched-tokens "$$MAX_NUM_BATCHED_TOKENS" \
+          --max-num-seqs "$$MAX_NUM_SEQS" \
+          --max-cudagraph-capture-size "$$MAX_CUDAGRAPH_CAPTURE_SIZE" \
           --attention-backend B12X_MLA_SPARSE \
           --moe-backend b12x \
           --kv-cache-dtype fp8 \
           --tool-call-parser glm47 \
           --enable-auto-tool-choice \
           --reasoning-parser glm45 \
-          --hf-overrides '{"use_index_cache":true,"index_topk_pattern":"FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS"}' \
+          --hf-overrides "$$HF_OVERRIDES" \
           --quantization modelopt_fp4 \
-          --speculative-config '{"model":"/root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522","method":"mtp","num_speculative_tokens":3,"moe_backend":"b12x","draft_sample_method":"probabilistic"}'
+          $$SPEC_ARGS
 ```
 
-Equivalent `docker run`:
+Examples:
 
 ```bash
-docker rm -f glm52-v12-dcp4-mtp3 2>/dev/null || true
-mkdir -p /root/.cache/vllm-glm52-v12-dcp4
+# DCP1, no MTP
+DCP_SIZE=1 MTP_TOKENS=0 PORT=5541 docker compose -f glm52-v12.compose.yaml up -d
+
+# DCP4, default MTP3
+DCP_SIZE=4 MTP_TOKENS=3 PORT=5543 docker compose -f glm52-v12.compose.yaml up -d
+```
+
+## Single Docker Run
+
+```bash
+docker rm -f glm52-v12 2>/dev/null || true
+mkdir -p /root/.cache/vllm-glm52-v12
 
 docker run -d \
-  --name glm52-v12-dcp4-mtp3 \
-  --gpus '"device=0,1,2,3,4,5,6,7"' \
-  --ipc=host --shm-size=32g --network=host \
+  --init \
+  --name glm52-v12 \
+  --gpus all --runtime nvidia \
+  --ipc host --shm-size 32g --network host \
   --ulimit memlock=-1 --ulimit stack=67108864 \
   --ulimit nofile=1048576:1048576 \
   -v /root/.cache/huggingface:/root/.cache/huggingface \
-  -v /root/.cache/vllm-glm52-v12-dcp4:/cache \
+  -v /root/.cache/vllm-glm52-v12:/cache \
   -e CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
   -e CUDA_DEVICE_ORDER=PCI_BUS_ID \
   -e CUDA_DEVICE_MAX_CONNECTIONS=32 \
-  -e CUTE_DSL_ARCH=sm_120a \
   -e OMP_NUM_THREADS=16 \
-  -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-  -e SAFETENSORS_FAST_GPU=1 \
+  -e CUTE_DSL_ARCH=sm_120a \
   -e NCCL_IB_DISABLE=1 \
   -e NCCL_P2P_LEVEL=SYS \
   -e NCCL_PROTO=LL,LL128,Simple \
+  -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+  -e SAFETENSORS_FAST_GPU=1 \
   -e VLLM_WORKER_MULTIPROC_METHOD=spawn \
-  -e VLLM_USE_V2_MODEL_RUNNER=1 \
+  -e VLLM_USE_AOT_COMPILE=1 \
+  -e VLLM_USE_BREAKABLE_CUDAGRAPH=0 \
+  -e VLLM_USE_MEGA_AOT_ARTIFACT=1 \
   -e VLLM_USE_FLASHINFER_SAMPLER=1 \
-  -e VLLM_USE_B12X_MOE=1 \
   -e VLLM_USE_B12X_FP8_GEMM=1 \
+  -e VLLM_USE_B12X_MOE=1 \
   -e VLLM_USE_B12X_SPARSE_INDEXER=1 \
+  -e VLLM_USE_V2_MODEL_RUNNER=1 \
   -e VLLM_ENABLE_PCIE_ALLREDUCE=1 \
   -e VLLM_PCIE_ALLREDUCE_BACKEND=b12x \
   -e VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE=64KB \
+  -e USES_B12X=True \
   -e B12X_DENSE_SPLITK_TURBO=1 \
   -e B12X_W4A16_TC_DECODE=1 \
   -e B12X_MOE_FORCE_A16=1 \
@@ -265,11 +281,19 @@ docker run -d \
   -e VLLM_DCP_SHARD_DRAFT=1 \
   -e VLLM_DCP_GLOBAL_TOPK_PREFILL_ONLY=0 \
   -e VLLM_DCP_TOPK_FORCE_DEEPGEMM=0 \
+  -e VLLM_CACHE_DIR=/cache/jit/vllm \
+  -e TRITON_CACHE_DIR=/cache/jit/triton \
+  -e TORCH_EXTENSIONS_DIR=/cache/jit/torch_extensions \
+  -e TORCHINDUCTOR_CACHE_DIR=/cache/jit/torchinductor \
+  -e FLASHINFER_WORKSPACE_BASE=/cache/jit/flashinfer \
+  -e XDG_CACHE_HOME=/cache/jit \
+  --entrypoint bash \
   voipmonitor/vllm:glm52-dark-devotion-pr31-dcpglobaltopk-mtp-cu132-20260621 \
-  /bin/bash -lc 'set -euo pipefail
+  -lc 'set -euo pipefail
     unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
-    exec /opt/venv/bin/python -m vllm.entrypoints.cli.main serve \
-      /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522 \
+    MODEL=/root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522
+    PATTERN=FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS
+    exec /opt/venv/bin/python -m vllm.entrypoints.cli.main serve "$MODEL" \
       --served-model-name GLM-5.2-NVFP4 \
       --trust-remote-code --host 0.0.0.0 --port 5543 \
       --tensor-parallel-size 8 --pipeline-parallel-size 1 \
@@ -277,8 +301,10 @@ docker run -d \
       --decode-context-parallel-size 4 \
       --dcp-comm-backend ag_rs \
       --dcp-kv-cache-interleave-size 1 \
-      --enable-chunked-prefill --enable-prefix-caching \
-      --load-format fastsafetensors --async-scheduling \
+      --enable-chunked-prefill \
+      --enable-prefix-caching \
+      --load-format fastsafetensors \
+      --async-scheduling \
       -cc.pass_config.fuse_allreduce_rms=True \
       --gpu-memory-utilization 0.88 \
       --max-num-batched-tokens 8192 \
@@ -290,133 +316,139 @@ docker run -d \
       --tool-call-parser glm47 \
       --enable-auto-tool-choice \
       --reasoning-parser glm45 \
-      --hf-overrides '\''{"use_index_cache":true,"index_topk_pattern":"FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS"}'\'' \
+      --hf-overrides "{\"use_index_cache\":true,\"index_topk_pattern\":\"$PATTERN\"}" \
       --quantization modelopt_fp4 \
-      --speculative-config '\''{"model":"/root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522","method":"mtp","num_speculative_tokens":3,"moe_backend":"b12x","draft_sample_method":"probabilistic"}'\'''
+      --speculative-config "{\"model\":\"$MODEL\",\"method\":\"mtp\",\"num_speculative_tokens\":3,\"moe_backend\":\"b12x\",\"draft_sample_method\":\"probabilistic\"}"'
 ```
 
-Local validation launch:
+For no-MTP runs, remove `--speculative-config ...` or set `MTP_TOKENS=0` in the
+compose recipe.
 
-| Field | Value |
-|---|---|
-| Container | `glm52-v12-pr31-dcp4-mtp3-prod-0to7` |
-| Port | `5543` |
-| GPUs | `0,1,2,3,4,5,6,7` |
-| TP / DCP / MTP | `8 / 4 / 3` |
-| `max_num_seqs` | `32` |
-| `max_cudagraph_capture_size` | `128` |
-| KV cache | `1,597,696` tokens |
-| Max concurrency for 256k | `6.24x` |
+## Speed Results
 
-## Debug DCP1 MTP3
+All speed results below used:
 
-Use this when validating functionality quickly. It keeps the same image and
-model path but uses DCP1 with a smaller graph capture profile.
+```text
+TP=8, max_model_len=256000, max_num_seqs=32, max_cudagraph_capture_size=128,
+max_num_batched_tokens=8192, gpu_memory_utilization=0.88, FP8 KV, B12X A16 MoE.
+```
+
+Benchmark command:
 
 ```bash
-docker rm -f glm52-v12-dcp1-mtp3 2>/dev/null || true
-mkdir -p /root/.cache/vllm-glm52-v12-dcp1
-
-docker run -d \
-  --name glm52-v12-dcp1-mtp3 \
-  --gpus '"device=8,9,10,11,12,13,14,15"' \
-  --ipc=host --shm-size=32g --network=host \
-  --ulimit memlock=-1 --ulimit stack=67108864 \
-  --ulimit nofile=1048576:1048576 \
-  -v /root/.cache/huggingface:/root/.cache/huggingface \
-  -v /root/.cache/vllm-glm52-v12-dcp1:/cache \
-  -e CUDA_VISIBLE_DEVICES=8,9,10,11,12,13,14,15 \
-  -e CUDA_DEVICE_ORDER=PCI_BUS_ID \
-  -e CUDA_DEVICE_MAX_CONNECTIONS=32 \
-  -e CUTE_DSL_ARCH=sm_120a \
-  -e OMP_NUM_THREADS=16 \
-  -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-  -e SAFETENSORS_FAST_GPU=1 \
-  -e NCCL_IB_DISABLE=1 \
-  -e NCCL_P2P_LEVEL=SYS \
-  -e NCCL_PROTO=LL,LL128,Simple \
-  -e VLLM_WORKER_MULTIPROC_METHOD=spawn \
-  -e VLLM_USE_V2_MODEL_RUNNER=1 \
-  -e VLLM_USE_FLASHINFER_SAMPLER=1 \
-  -e VLLM_USE_B12X_MOE=1 \
-  -e VLLM_USE_B12X_FP8_GEMM=1 \
-  -e VLLM_USE_B12X_SPARSE_INDEXER=1 \
-  -e VLLM_ENABLE_PCIE_ALLREDUCE=1 \
-  -e VLLM_PCIE_ALLREDUCE_BACKEND=b12x \
-  -e VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE=64KB \
-  -e B12X_DENSE_SPLITK_TURBO=1 \
-  -e B12X_W4A16_TC_DECODE=1 \
-  -e B12X_MOE_FORCE_A16=1 \
-  -e VLLM_DCP_GLOBAL_TOPK=1 \
-  -e VLLM_DCP_SHARD_DRAFT=1 \
-  -e VLLM_DCP_GLOBAL_TOPK_PREFILL_ONLY=0 \
-  -e VLLM_DCP_TOPK_FORCE_DEEPGEMM=0 \
-  voipmonitor/vllm:glm52-dark-devotion-pr31-dcpglobaltopk-mtp-cu132-20260621 \
-  /bin/bash -lc 'set -euo pipefail
-    unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
-    exec /opt/venv/bin/python -m vllm.entrypoints.cli.main serve \
-      /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522 \
-      --served-model-name GLM-5.2-NVFP4 \
-      --trust-remote-code --host 0.0.0.0 --port 5545 \
-      --tensor-parallel-size 8 --pipeline-parallel-size 1 \
-      --max-model-len 256000 \
-      --decode-context-parallel-size 1 \
-      --enable-chunked-prefill --enable-prefix-caching \
-      --load-format fastsafetensors --async-scheduling \
-      -cc.pass_config.fuse_allreduce_rms=True \
-      --gpu-memory-utilization 0.88 \
-      --max-num-batched-tokens 8192 \
-      --max-num-seqs 4 \
-      --max-cudagraph-capture-size 24 \
-      --attention-backend B12X_MLA_SPARSE \
-      --moe-backend b12x \
-      --kv-cache-dtype fp8 \
-      --tool-call-parser glm47 \
-      --enable-auto-tool-choice \
-      --reasoning-parser glm45 \
-      --hf-overrides '\''{"use_index_cache":true,"index_topk_pattern":"FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS"}'\'' \
-      --quantization modelopt_fp4 \
-      --speculative-config '\''{"model":"/root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522","method":"mtp","num_speculative_tokens":3,"moe_backend":"b12x","draft_sample_method":"probabilistic"}'\'''
+python3 /root/llm-inference-bench/llm_decode_bench.py --port 5543
 ```
 
-Local validation launch:
+### Decode ctx0 Aggregate tok/s
 
-| Field | Value |
-|---|---|
-| Container | `glm52-df8ad3b-mtptopkscores-dcp1-mtp3-8to15` |
-| Port | `5545` |
-| GPUs | `8,9,10,11,12,13,14,15` |
-| TP / DCP / MTP | `8 / 1 / 3` |
-| `max_num_seqs` | `4` |
-| `max_cudagraph_capture_size` | `24` |
-| KV cache | `403,328` tokens |
+| DCP | MTP | cc1 | cc2 | cc4 | cc8 | cc16 | cc32 | cc64 | cc128 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | off | 78.0 | 132.4 | 217.0 | 327.5 | 508.0 | 703.1 | - | - |
+| 1 | 3 | 104.0 | 172.6 | 306.5 | 503.9 | 787.4 | 1,204 | - | - |
+| 2 | off | 66.3 | 107.2 | 174.2 | 280.1 | 437.6 | 608.9 | 626.4 | - |
+| 2 | 3 | 102.7 | 170.2 | 298.5 | 474.2 | 724.3 | 1,087 | 1,013 | - |
+| 4 | off | 62.6 | 98.8 | 153.6 | 239.0 | 344.6 | 454.0 | 462.2 | 465.4 |
+| 4 | 3 | 90.4 | 163.4 | 279.5 | 445.3 | 657.6 | 985.7 | 915.1 | 904.1 |
+| 8 | off | 55.2 | 84.2 | 125.7 | 179.1 | 238.0 | 295.2 | 300.3 | 301.5 |
+| 8 | 3 | 93.7 | 163.4 | 260.1 | 406.2 | 568.7 | 770.6 | 741.6 | 745.6 |
+
+### Prefill And 128k Decode
+
+| DCP | MTP | 8k prefill | 64k prefill | 128k prefill | 128k cc1 | 128k cc2 |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | off | 4,721 | 4,454 | 4,128 | 73.2 | 121.9 |
+| 1 | 3 | 4,485 | 4,364 | 4,035 | 88.3 | 142.0 |
+| 2 | off | 4,051 | 4,098 | 3,947 | 63.6 | 103.3 |
+| 2 | 3 | 3,958 | 4,008 | 3,861 | 89.6 | 157.0 |
+| 4 | off | 3,081 | 3,111 | 3,065 | 61.3 | 97.0 |
+| 4 | 3 | 3,005 | 3,043 | 2,994 | 92.5 | 152.1 |
+| 8 | off | 2,063 | 2,078 | 2,064 | 53.5 | 83.4 |
+| 8 | 3 | 2,023 | 2,038 | 2,024 | 95.7 | 154.9 |
+
+### Startup KV Cache
+
+| DCP | MTP | GPU KV cache tokens | Max concurrency at 256k |
+|---|---:|---:|---:|
+| 1 | off | 431,168 | 1.68x |
+| 1 | 3 | 403,328 | 1.58x |
+| 2 | off | 856,832 | 3.35x |
+| 2 | 3 | 798,848 | 3.12x |
+| 4 | off | 1,713,664 | 6.69x |
+| 4 | 3 | 1,597,696 | 6.24x |
+| 8 | off | 3,411,968 | 13.33x |
+| 8 | 3 | 3,075,072 | 12.01x |
+
+### Coding Peak
+
+This is the `/mnt/test.py -L` Sieve-of-Eratosthenes coding prompt, measured on
+DCP1/MTP5 with the same image and `max_num_seqs=32`, graph capture `128`.
+
+| Profile | Samples | Generation-only tok/s mean | Median | Max | CJK |
+|---|---:|---:|---:|---:|---:|
+| DCP1 MTP5 coding prompt | 30 | 159.1 | 159.0 | 178.9 | 0/30 |
+
+The benchmark harness also has a default-off `--coding-peak` mode for future
+runs. It sends the same coding prompt without forcing temperature and records
+five runs by default.
+
+## KLD
+
+Reference BF16 logits:
+
+```text
+/root/kld/glm52_refs/bf16-b12xmlasparse-w1-ctx2048-s512-20260618/logits_0.safetensors
+/root/kld/glm52_refs/decode_teacher_bf16_ref_ctx2048_t17_20260618.safetensors
+```
+
+The optional logits-export plumbing is in:
+
+```text
+https://github.com/local-inference-lab/vllm/pull/32
+```
+
+It adds `SamplingParams.return_prompt_logits` and `return_sample_logits` so KLD
+capture does not need ad-hoc local patches.
+
+Current v12 NVFP4/B12X/A16 result:
+
+| Checkpoint/runtime | Prefill mean KLD | Decode KL model->BF16 | Decode KL BF16->model | Decode JS | Token match |
+|---|---:|---:|---:|---:|---:|
+| v12 NVFP4 B12X A16 | 0.0705969 | 0.000005873 | 0.000007896 | 0.000001629 | 17/17 |
+| v11 NVFP4 B12X A16 | 0.067532 | 0.000009892 | 0.000013952 | 0.000002845 | 17/17 |
+| v11 official FP8 | 0.079041 | 0.000085952 | 0.000045639 | 0.000011247 | 17/17 |
+| v11 MXFP8 | 0.018720 | 0.000012423 | 0.000015746 | 0.000003378 | 17/17 |
+
+Local v12 KLD artifacts:
+
+```text
+/root/kld/glm52_v12_kld_nvfp4_b12x_a16_20260621_144826
+```
+
+The BF16 reference upload script is:
+
+```text
+/root/kld/upload_glm52_bf16_refs_to_hf.py
+```
+
+Upload to Hugging Face is currently blocked because the available token for
+user `festr2` is read-only. A write token is required to create or update the
+reference-logits repository.
 
 ## Smoke Tests
 
-Health:
-
 ```bash
 curl -s http://127.0.0.1:5543/v1/models | python3 -m json.tool | head
-```
-
-Short decode:
-
-```bash
 python3 /mnt/test.py --port 5543 -L
+docker logs -f glm52-v12
 ```
 
-Decode benchmark:
+For fast startup while debugging a single request, use smaller scheduler
+settings:
 
-```bash
-python3 /root/llm-inference-bench/llm_decode_bench.py \
-  --port 5543 \
-  --concurrency 1 \
-  --contexts 0k \
-  --skip-prefill
+```text
+MAX_NUM_SEQS=1
+MAX_CUDAGRAPH_CAPTURE_SIZE=4
 ```
 
-Runtime logs:
-
-```bash
-docker logs -f glm52-v12-dcp4-mtp3
-```
+Use the full `MAX_NUM_SEQS=32` and graph capture `128` profile for production
+and benchmark numbers above.
