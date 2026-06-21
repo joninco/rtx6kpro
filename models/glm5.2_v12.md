@@ -8,22 +8,23 @@ B12X sparse MLA attention, B12X NvFP4 MoE forced to A16, FP8 KV cache, and MTP3.
 ## Image
 
 ```text
-voipmonitor/vllm:glm52-dark-devotion-pr31-dcpglobaltopk-mtp-cu132-20260621
-voipmonitor/vllm@sha256:de96648aeade8a8189b3614d15d3bdec98f21dce3b3dc239262db5d06c52fc2e
+voipmonitor/vllm:glm52-dark-devotion-pr31-barrierfix-vllm79f154c-b12x5af873a-cu132-20260621
+voipmonitor/vllm@sha256:aa456f164cf5e6ce7f081e5961c28c500e7213d36f56ca8c08a85332558acb21
 ```
 
 Verified package versions:
 
 | Component | Version / revision |
 |---|---|
-| vLLM package | `0.11.2.dev279+dark.devotion.df8ad3b.b12x5af873a.fi9c5ed7c.dcpglobaltopk.mtptopkscores.cu132.20260621` |
-| vLLM base | `local-inference-lab/vllm dev/dark-devotion @ df8ad3b202c84937a23cfa9d93f7a3677da8ecde` |
-| vLLM fix | PR #31, `000807e2b0e33277ac6b3ae51ae2e52d8472c9ab` |
+| vLLM package | `0.11.2.dev279+dark.devotion.pr31.barrierfix.79f154c.b12x5af873a.fi9c5ed7c.cu132.20260621` |
+| vLLM base | `local-inference-lab/vllm dev/dark-devotion @ 4e4a0b91a73d474374e8e5da528a24bb6a16b0eb` |
+| vLLM fix | PR #31, `79f154c998acd315bd999c8909cfc24085c23f85` |
 | B12X | `lukealonso/b12x master @ 5af873a7b6c81fbf533ef96bede13fbf4744ad2a` |
 | FlashInfer | `9c5ed7c194e7412780862491742fc655daaad6ac` |
 | PyTorch | `2.12.0+cu132` |
 | CUDA / cuBLAS | CUDA `13.2.x`, cuBLAS runtime `13.4.1.2` |
 | NCCL | local inference NCCL `2.30.4` |
+| Docker build repo | `local-inference-lab/blackwell-llm-docker @ dd842a28f6ea7c893978614edc6b61fdeda3e823` |
 
 The image is a clean Docker build, not a runtime overlay.
 
@@ -32,13 +33,13 @@ The image is a clean Docker build, not a runtime overlay.
 Build repository:
 
 ```text
-https://github.com/local-inference-lab/blackwell-llm-docker
+https://github.com/local-inference-lab/blackwell-llm-docker @ dd842a28f6ea7c893978614edc6b61fdeda3e823
 ```
 
 Build script used:
 
 ```text
-/root/vllm/blackwell-llm-docker/build-dark-devotion-cu132.sh
+/root/vllm/blackwell-llm-docker/build-dark-devotion-pr31-barrierfix-cu132.sh
 ```
 
 Exact build invocation:
@@ -46,7 +47,7 @@ Exact build invocation:
 ```bash
 cd /root/vllm/blackwell-llm-docker
 
-IMAGE=voipmonitor/vllm:dark-devotion-df8ad3b-b12x5af873a-mtptopkscores-cu132-20260621 \
+IMAGE=voipmonitor/vllm:glm52-dark-devotion-pr31-barrierfix-vllm79f154c-b12x5af873a-cu132-20260621 \
 BUILD_BASE_IMAGE=0 PUSH_BASE_IMAGE=0 \
 SYSTEM_BASE_IMAGE=voipmonitor/vllm:glm-kimi-cu132-system-base-20260608 \
 BUILD_BASE_IMAGE_TAG=voipmonitor/vllm:glm-kimi-cu132-build-base-20260608 \
@@ -54,18 +55,12 @@ FLASHINFER_REF=main \
 FLASHINFER_COMMIT=9c5ed7c194e7412780862491742fc655daaad6ac \
 B12X_REF=master \
 B12X_COMMIT=5af873a7b6c81fbf533ef96bede13fbf4744ad2a \
-VLLM_REF=df8ad3b202c84937a23cfa9d93f7a3677da8ecde \
-VLLM_COMMIT=df8ad3b202c84937a23cfa9d93f7a3677da8ecde \
-LAUNCHER_REF=df8ad3b202c84937a23cfa9d93f7a3677da8ecde \
-LAUNCHER_COMMIT=df8ad3b202c84937a23cfa9d93f7a3677da8ecde \
-VLLM_PATCH_URL=http://172.17.0.1:8199/0001-dark-devotion-mtp-topk-scores-b12x-dcp.patch \
-VLLM_PATCH_SHA256=8231580f5c7cd8a9f17508058a818f4809a2a3dbff49e3b4a1014b4d634df504 \
-VLLM_BUILD_VERSION=0.11.2.dev279+dark.devotion.df8ad3b.b12x5af873a.fi9c5ed7c.dcpglobaltopk.mtptopkscores.cu132.20260621 \
-./build-dark-devotion-cu132.sh
-
-docker tag \
-  voipmonitor/vllm:dark-devotion-df8ad3b-b12x5af873a-mtptopkscores-cu132-20260621 \
-  voipmonitor/vllm:glm52-dark-devotion-pr31-dcpglobaltopk-mtp-cu132-20260621
+VLLM_REF=codex/dark-devotion-dcp4-mtp3-globaltopk-fix-20260621 \
+VLLM_COMMIT=79f154c998acd315bd999c8909cfc24085c23f85 \
+LAUNCHER_REF=codex/dark-devotion-dcp4-mtp3-globaltopk-fix-20260621 \
+LAUNCHER_COMMIT=79f154c998acd315bd999c8909cfc24085c23f85 \
+VLLM_BUILD_VERSION=0.11.2.dev279+dark.devotion.pr31.barrierfix.79f154c.b12x5af873a.fi9c5ed7c.cu132.20260621 \
+./build-dark-devotion-pr31-barrierfix-cu132.sh
 ```
 
 ## Model
@@ -99,6 +94,7 @@ These are the important switches:
 | `VLLM_USE_B12X_SPARSE_INDEXER` | `1` |
 | `VLLM_DCP_GLOBAL_TOPK` | `1` |
 | `VLLM_DCP_SHARD_DRAFT` | `1` |
+| `VLLM_PREFIX_CACHE_RETENTION_INTERVAL` | `4092` |
 | `MTP` default | `3`, probabilistic draft sampling |
 | DCP default | choose `1`, `2`, `4`, or `8` at launch |
 
@@ -118,7 +114,7 @@ editing the command.
 ```yaml
 services:
   glm52:
-    image: ${IMAGE:-voipmonitor/vllm:glm52-dark-devotion-pr31-dcpglobaltopk-mtp-cu132-20260621}
+    image: ${IMAGE:-voipmonitor/vllm:glm52-dark-devotion-pr31-barrierfix-vllm79f154c-b12x5af873a-cu132-20260621}
     container_name: ${NAME:-glm52-v12}
     network_mode: host
     ipc: host
@@ -167,6 +163,7 @@ services:
       VLLM_DCP_SHARD_DRAFT: "1"
       VLLM_DCP_GLOBAL_TOPK_PREFILL_ONLY: "0"
       VLLM_DCP_TOPK_FORCE_DEEPGEMM: "0"
+      VLLM_PREFIX_CACHE_RETENTION_INTERVAL: "4092"
       VLLM_CACHE_DIR: /cache/jit/vllm
       TRITON_CACHE_DIR: /cache/jit/triton
       TORCH_EXTENSIONS_DIR: /cache/jit/torch_extensions
@@ -281,6 +278,7 @@ docker run -d \
   -e VLLM_DCP_SHARD_DRAFT=1 \
   -e VLLM_DCP_GLOBAL_TOPK_PREFILL_ONLY=0 \
   -e VLLM_DCP_TOPK_FORCE_DEEPGEMM=0 \
+  -e VLLM_PREFIX_CACHE_RETENTION_INTERVAL=4092 \
   -e VLLM_CACHE_DIR=/cache/jit/vllm \
   -e TRITON_CACHE_DIR=/cache/jit/triton \
   -e TORCH_EXTENSIONS_DIR=/cache/jit/torch_extensions \
@@ -288,7 +286,7 @@ docker run -d \
   -e FLASHINFER_WORKSPACE_BASE=/cache/jit/flashinfer \
   -e XDG_CACHE_HOME=/cache/jit \
   --entrypoint bash \
-  voipmonitor/vllm:glm52-dark-devotion-pr31-dcpglobaltopk-mtp-cu132-20260621 \
+  voipmonitor/vllm:glm52-dark-devotion-pr31-barrierfix-vllm79f154c-b12x5af873a-cu132-20260621 \
   -lc 'set -euo pipefail
     unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
     MODEL=/root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522
@@ -332,6 +330,15 @@ All speed results below used:
 TP=8, max_model_len=256000, max_num_seqs=32, max_cudagraph_capture_size=128,
 max_num_batched_tokens=8192, gpu_memory_utilization=0.88, FP8 KV, B12X A16 MoE.
 ```
+
+The `79f154c` rebuild only changes the DCP warmup barrier implementation from a
+direct device-group/NCCL barrier to `dcp_group.barrier()`. A bounded smoke run on
+DCP4/MTP3 with the debug scheduler profile (`max_num_seqs=4`,
+`max_cudagraph_capture_size=24`) produced 15 complete `/mnt/test.py -L`
+samples with generation-only mean `123.52 tok/s`, median `122.98 tok/s`, and
+CJK `0/15`. The earlier same-profile reference was about `119.96 tok/s` mean /
+`120.27 tok/s` median, so the barrier fix did not introduce a measurable decode
+regression.
 
 Benchmark command:
 
