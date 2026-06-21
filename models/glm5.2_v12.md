@@ -2,29 +2,30 @@
 
 This page documents the reproducible GLM-5.2 NVFP4 serving stack built from
 `local-inference-lab/vllm dev/dark-devotion` with the DCP global-top-k MTP fix
-from PR #31. The intended default runtime is TP8 with DCP selectable at launch,
+from PR #31 and the B12X GLM odd-16-head prefill split needed for TP6/DCP3 and
+TP6/DCP6. The intended default runtime is TP8 with DCP selectable at launch,
 B12X sparse MLA attention, B12X NvFP4 MoE forced to A16, FP8 KV cache, and MTP3.
 
 ## Image
 
 ```text
-voipmonitor/vllm:glm52-dark-devotion-pr31-barrierfix-vllm79f154c-b12x5af873a-cu132-20260621
-voipmonitor/vllm@sha256:aa456f164cf5e6ce7f081e5961c28c500e7213d36f56ca8c08a85332558acb21
+voipmonitor/vllm:glm52-dark-devotion-pr31-tp6odd16-vllm79f154c-b12x1cfc6cf-cu132-20260621
+voipmonitor/vllm@sha256:3ad851d7117613ecc8c76bcfb12adb794de0e78c6324b90b40f739f1138baba6
 ```
 
 Verified package versions:
 
 | Component | Version / revision |
 |---|---|
-| vLLM package | `0.11.2.dev279+dark.devotion.pr31.barrierfix.79f154c.b12x5af873a.fi9c5ed7c.cu132.20260621` |
+| vLLM package | `0.11.2.dev279+dark.devotion.pr31.tp6odd16.79f154c.b12x1cfc6cf.fi9c5ed7c.cu132.20260621` |
 | vLLM base | `local-inference-lab/vllm dev/dark-devotion @ 4e4a0b91a73d474374e8e5da528a24bb6a16b0eb` |
 | vLLM fix | PR #31, `79f154c998acd315bd999c8909cfc24085c23f85` |
-| B12X | `lukealonso/b12x master @ 5af873a7b6c81fbf533ef96bede13fbf4744ad2a` |
+| B12X | `voipmonitor/b12x codex/glm-prefill-odd16-split-20260621 @ 1cfc6cffc0ccfd01d0d66c775a8de952eba12c09` |
 | FlashInfer | `9c5ed7c194e7412780862491742fc655daaad6ac` |
 | PyTorch | `2.12.0+cu132` |
 | CUDA / cuBLAS | CUDA `13.2.x`, cuBLAS runtime `13.4.1.2` |
 | NCCL | local inference NCCL `2.30.4` |
-| Docker build repo | `local-inference-lab/blackwell-llm-docker @ dd842a28f6ea7c893978614edc6b61fdeda3e823` |
+| Docker build repo | `local-inference-lab/blackwell-llm-docker @ 38e1c3f0654f6d1ff296cb7e9f860f089b6a115f` |
 
 The image is a clean Docker build, not a runtime overlay.
 
@@ -33,13 +34,13 @@ The image is a clean Docker build, not a runtime overlay.
 Build repository:
 
 ```text
-https://github.com/local-inference-lab/blackwell-llm-docker @ dd842a28f6ea7c893978614edc6b61fdeda3e823
+https://github.com/local-inference-lab/blackwell-llm-docker @ 38e1c3f0654f6d1ff296cb7e9f860f089b6a115f
 ```
 
 Build script used:
 
 ```text
-/root/vllm/blackwell-llm-docker/build-dark-devotion-pr31-barrierfix-cu132.sh
+/root/vllm/blackwell-llm-docker/build-dark-devotion-pr31-tp6odd16-cu132.sh
 ```
 
 Exact build invocation:
@@ -47,20 +48,21 @@ Exact build invocation:
 ```bash
 cd /root/vllm/blackwell-llm-docker
 
-IMAGE=voipmonitor/vllm:glm52-dark-devotion-pr31-barrierfix-vllm79f154c-b12x5af873a-cu132-20260621 \
+IMAGE=voipmonitor/vllm:glm52-dark-devotion-pr31-tp6odd16-vllm79f154c-b12x1cfc6cf-cu132-20260621 \
 BUILD_BASE_IMAGE=0 PUSH_BASE_IMAGE=0 \
 SYSTEM_BASE_IMAGE=voipmonitor/vllm:glm-kimi-cu132-system-base-20260608 \
 BUILD_BASE_IMAGE_TAG=voipmonitor/vllm:glm-kimi-cu132-build-base-20260608 \
 FLASHINFER_REF=main \
 FLASHINFER_COMMIT=9c5ed7c194e7412780862491742fc655daaad6ac \
-B12X_REF=master \
-B12X_COMMIT=5af873a7b6c81fbf533ef96bede13fbf4744ad2a \
+B12X_REPO=https://github.com/voipmonitor/b12x.git \
+B12X_REF=codex/glm-prefill-odd16-split-20260621 \
+B12X_COMMIT=1cfc6cffc0ccfd01d0d66c775a8de952eba12c09 \
 VLLM_REF=codex/dark-devotion-dcp4-mtp3-globaltopk-fix-20260621 \
 VLLM_COMMIT=79f154c998acd315bd999c8909cfc24085c23f85 \
 LAUNCHER_REF=codex/dark-devotion-dcp4-mtp3-globaltopk-fix-20260621 \
 LAUNCHER_COMMIT=79f154c998acd315bd999c8909cfc24085c23f85 \
-VLLM_BUILD_VERSION=0.11.2.dev279+dark.devotion.pr31.barrierfix.79f154c.b12x5af873a.fi9c5ed7c.cu132.20260621 \
-./build-dark-devotion-pr31-barrierfix-cu132.sh
+VLLM_BUILD_VERSION=0.11.2.dev279+dark.devotion.pr31.tp6odd16.79f154c.b12x1cfc6cf.fi9c5ed7c.cu132.20260621 \
+./build-dark-devotion-pr31-tp6odd16-cu132.sh
 ```
 
 ## Model
@@ -116,7 +118,7 @@ editing the command.
 ```yaml
 services:
   glm52:
-    image: ${IMAGE:-voipmonitor/vllm:glm52-dark-devotion-pr31-barrierfix-vllm79f154c-b12x5af873a-cu132-20260621}
+    image: ${IMAGE:-voipmonitor/vllm:glm52-dark-devotion-pr31-tp6odd16-vllm79f154c-b12x1cfc6cf-cu132-20260621}
     container_name: ${NAME:-glm52-v12}
     network_mode: host
     ipc: host
@@ -286,7 +288,7 @@ docker run -d \
   -e FLASHINFER_WORKSPACE_BASE=/cache/jit/flashinfer \
   -e XDG_CACHE_HOME=/cache/jit \
   --entrypoint bash \
-  voipmonitor/vllm:glm52-dark-devotion-pr31-barrierfix-vllm79f154c-b12x5af873a-cu132-20260621 \
+  voipmonitor/vllm:glm52-dark-devotion-pr31-tp6odd16-vllm79f154c-b12x1cfc6cf-cu132-20260621 \
   -lc 'set -euo pipefail
     unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS VLLM_PREFIX_CACHE_RETENTION_INTERVAL
     MODEL=/root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522
@@ -397,6 +399,33 @@ DCP1/MTP5 with the same image and `max_num_seqs=32`, graph capture `128`.
 The benchmark harness also has a default-off `--coding-peak` mode for future
 runs. It sends the same coding prompt without forcing temperature and records
 five runs by default.
+
+### TP6/DCP6 Debug Smoke
+
+The `tp6odd16` image also includes the B12X GLM odd-16-head prefill split needed
+for TP6 DCP layouts. This was validated as a startup/coherence smoke test, not a
+full throughput sweep:
+
+```text
+TP=6, DCP=6, MTP=3, max_model_len=24576, max_num_seqs=1,
+max_cudagraph_capture_size=4, max_num_batched_tokens=2048,
+gpu_memory_utilization=0.966, SAFETENSORS_FAST_GPU=0, load-format=auto.
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| GPU KV cache tokens | 170,112 |
+| Max concurrency at 24,576 tokens | 6.92x |
+| Graph capture time | 18 s |
+| `/mnt/test.py -L -c 1000 --hide-reasoning` | 5 iterations before timeout |
+| CJK / duplicated-code pattern | 0 / 0 |
+| Generation-only tok/s | about 77-81 |
+| MTP acceptance examples | about 0.92 / 0.80 / 0.68 |
+
+Use the same reduced scheduler settings for TP6/DCP6 debugging. Use the TP8
+recipe above for production DCP1/2/4/8 runs until TP6 has a full sweep.
 
 ## KLD
 
