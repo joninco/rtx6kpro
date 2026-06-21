@@ -94,7 +94,6 @@ These are the important switches:
 | `VLLM_USE_B12X_SPARSE_INDEXER` | `1` |
 | `VLLM_DCP_GLOBAL_TOPK` | `1` |
 | `VLLM_DCP_SHARD_DRAFT` | `1` |
-| `VLLM_PREFIX_CACHE_RETENTION_INTERVAL` | `4092` |
 | `MTP` default | `3`, probabilistic draft sampling |
 | DCP default | choose `1`, `2`, `4`, or `8` at launch |
 
@@ -105,6 +104,9 @@ not replicated per DCP rank.
 
 Do not set `NCCL_GRAPH_FILE` to an empty string. If no XML topology file is
 used, unset it before starting vLLM.
+
+Do not set `VLLM_PREFIX_CACHE_RETENTION_INTERVAL` for GLM-5.2. This vLLM build
+rejects it for models without a sliding-window KV cache group.
 
 ## Docker Compose
 
@@ -163,7 +165,6 @@ services:
       VLLM_DCP_SHARD_DRAFT: "1"
       VLLM_DCP_GLOBAL_TOPK_PREFILL_ONLY: "0"
       VLLM_DCP_TOPK_FORCE_DEEPGEMM: "0"
-      VLLM_PREFIX_CACHE_RETENTION_INTERVAL: "4092"
       VLLM_CACHE_DIR: /cache/jit/vllm
       TRITON_CACHE_DIR: /cache/jit/triton
       TORCH_EXTENSIONS_DIR: /cache/jit/torch_extensions
@@ -278,7 +279,6 @@ docker run -d \
   -e VLLM_DCP_SHARD_DRAFT=1 \
   -e VLLM_DCP_GLOBAL_TOPK_PREFILL_ONLY=0 \
   -e VLLM_DCP_TOPK_FORCE_DEEPGEMM=0 \
-  -e VLLM_PREFIX_CACHE_RETENTION_INTERVAL=4092 \
   -e VLLM_CACHE_DIR=/cache/jit/vllm \
   -e TRITON_CACHE_DIR=/cache/jit/triton \
   -e TORCH_EXTENSIONS_DIR=/cache/jit/torch_extensions \
@@ -288,7 +288,7 @@ docker run -d \
   --entrypoint bash \
   voipmonitor/vllm:glm52-dark-devotion-pr31-barrierfix-vllm79f154c-b12x5af873a-cu132-20260621 \
   -lc 'set -euo pipefail
-    unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
+    unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS VLLM_PREFIX_CACHE_RETENTION_INTERVAL
     MODEL=/root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522
     PATTERN=FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS
     exec /opt/venv/bin/python -m vllm.entrypoints.cli.main serve "$MODEL" \
