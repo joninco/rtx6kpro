@@ -162,7 +162,7 @@ services:
       USES_B12X: "True"
       B12X_DENSE_SPLITK_TURBO: "1"
       B12X_W4A16_TC_DECODE: "1"
-      B12X_MOE_FORCE_A16: "1"
+      B12X_MOE_FORCE_A16: ${B12X_MOE_FORCE_A16:-1}
       VLLM_DCP_GLOBAL_TOPK: "1"
       VLLM_DCP_SHARD_DRAFT: "1"
       VLLM_DCP_GLOBAL_TOPK_PREFILL_ONLY: "0"
@@ -399,6 +399,64 @@ DCP1/MTP5 with the same image and `max_num_seqs=32`, graph capture `128`.
 The benchmark harness also has a default-off `--coding-peak` mode for future
 runs. It sends the same coding prompt without forcing temperature and records
 five runs by default.
+
+### TP6 Launch Profiles
+
+TP6 supports DCP values that divide TP6: `1`, `2`, `3`, and `6`. Use the same
+compose file and override `TP_SIZE`, `DCP_SIZE`, and `MTP_TOKENS`:
+
+```bash
+# TP6 / DCP6 / MTP3 on host GPUs 8-13
+CUDA_VISIBLE_DEVICES=8,9,10,11,12,13 \
+TP_SIZE=6 DCP_SIZE=6 MTP_TOKENS=3 \
+PORT=5538 \
+GPU_MEMORY_UTILIZATION=0.97 \
+MAX_MODEL_LEN=128000 \
+MAX_NUM_SEQS=16 \
+MAX_NUM_BATCHED_TOKENS=2048 \
+MAX_CUDAGRAPH_CAPTURE_SIZE=64 \
+docker compose -f glm52-v12.compose.yaml up -d
+
+# TP6 / DCP6 / MTP1
+CUDA_VISIBLE_DEVICES=8,9,10,11,12,13 \
+TP_SIZE=6 DCP_SIZE=6 MTP_TOKENS=1 \
+PORT=5538 \
+GPU_MEMORY_UTILIZATION=0.97 \
+MAX_MODEL_LEN=128000 \
+MAX_NUM_SEQS=16 \
+MAX_NUM_BATCHED_TOKENS=2048 \
+MAX_CUDAGRAPH_CAPTURE_SIZE=64 \
+docker compose -f glm52-v12.compose.yaml up -d
+
+# Same run without forced A16 MoE
+CUDA_VISIBLE_DEVICES=8,9,10,11,12,13 \
+TP_SIZE=6 DCP_SIZE=6 MTP_TOKENS=3 \
+B12X_MOE_FORCE_A16=0 \
+PORT=5538 \
+GPU_MEMORY_UTILIZATION=0.97 \
+MAX_MODEL_LEN=128000 \
+MAX_NUM_SEQS=16 \
+MAX_NUM_BATCHED_TOKENS=2048 \
+MAX_CUDAGRAPH_CAPTURE_SIZE=64 \
+docker compose -f glm52-v12.compose.yaml up -d
+```
+
+For DCP1/DCP2/DCP3, change only `DCP_SIZE`. For no-MTP runs, set
+`MTP_TOKENS=0`.
+
+TP6/DCP6 KV budget measurement, host GPUs `8-13`, FP8 KV, `max_model_len=128000`,
+`max_num_seqs=16`, `max_cudagraph_capture_size=64`,
+`max_num_batched_tokens=2048`, `gpu_memory_utilization=0.97`:
+
+| TP | DCP | MTP | `B12X_MOE_FORCE_A16` | Model load per GPU | GPU KV cache tokens | Max concurrency at 128k |
+|---:|---:|---:|---:|---:|---:|---:|
+| 6 | 6 | 3 | 1 | 89.5 GiB | 214,227 | 1.67x |
+| 6 | 6 | 1 | 1 | 89.5 GiB | 214,227 | 1.67x |
+| 6 | 6 | 3 | 0 | 81.49 GiB | 1,162,347 | 9.08x |
+| 6 | 6 | 1 | 0 | 81.49 GiB | 1,162,730 | 9.08x |
+
+In this profile, MTP1 vs MTP3 does not materially change KV capacity. The large
+VRAM difference comes from forcing the B12X MoE A16 path.
 
 ### TP6 Debug Smoke
 
