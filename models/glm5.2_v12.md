@@ -400,29 +400,27 @@ The benchmark harness also has a default-off `--coding-peak` mode for future
 runs. It sends the same coding prompt without forcing temperature and records
 five runs by default.
 
-### TP6/DCP6 Debug Smoke
+### TP6 Debug Smoke
 
 The `tp6odd16` image also includes the B12X GLM odd-16-head prefill split needed
 for TP6 DCP layouts. This was validated as a startup/coherence smoke test, not a
 full throughput sweep:
 
 ```text
-TP=6, DCP=6, MTP=3, max_model_len=24576, max_num_seqs=1,
+TP=6, DCP=3 or 6, MTP=3, max_model_len=24576, max_num_seqs=1,
 max_cudagraph_capture_size=4, max_num_batched_tokens=2048,
 gpu_memory_utilization=0.966, SAFETENSORS_FAST_GPU=0, load-format=auto.
 ```
 
 Result:
 
-| Metric | Value |
-|---|---:|
-| GPU KV cache tokens | 170,112 |
-| Max concurrency at 24,576 tokens | 6.92x |
-| Graph capture time | 18 s |
-| `/mnt/test.py -L -c 1000 --hide-reasoning` | 5 iterations before timeout |
-| CJK / duplicated-code pattern | 0 / 0 |
-| Generation-only tok/s | about 77-81 |
-| MTP acceptance examples | about 0.92 / 0.80 / 0.68 |
+| TP | DCP | GPU KV cache tokens | Max concurrency | Graph capture | Coherence smoke |
+|---:|---:|---:|---:|---:|---|
+| 6 | 3 | 88,512 | 3.60x | 17 s | 4 complete `/mnt/test.py -L -c 1000 --hide-reasoning` iterations before timeout; CJK 0; generation-only about 71-80 tok/s |
+| 6 | 6 | 170,112 | 6.92x | 18 s | 5 iterations before timeout; CJK 0; no duplicated-code pattern; generation-only about 77-81 tok/s |
+
+DCP3 MTP acceptance windows were roughly `0.84-0.98 / 0.63-0.96 / 0.48-0.90`.
+DCP6 examples were about `0.92 / 0.80 / 0.68`.
 
 Use the same reduced scheduler settings for TP6/DCP6 debugging. Use the TP8
 recipe above for production DCP1/2/4/8 runs until TP6 has a full sweep.
