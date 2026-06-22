@@ -10,23 +10,23 @@ B12X NvFP4 MoE forced to A16, FP8 KV cache, and MTP3.
 ## Image
 
 ```text
-voipmonitor/vllm:glm52-dark-devotion-pr31-pr15-w4a16scale-vllm79f154c-b12xaecc88f-cu132-20260622
-voipmonitor/vllm@sha256:d3538564e30432946d58998e33d4ec4c7059630d312c91cf1b7f46195aa21cd3
+voipmonitor/vllm:glm52-dark-devotion-release-vllmec65667-b12xaaf1891-scale-fix-cu132-20260622
+voipmonitor/vllm@sha256:dc786d933582f77c421b18759411faf5b7d50863259a052e63cd72719604
 ```
 
 Verified package versions:
 
 | Component | Version / revision |
 |---|---|
-| vLLM package | `0.11.2.dev279+dark.devotion.pr31.pr15.w4a16scale.79f154c.b12xaecc88f.fi9c5ed7c.cu132.20260622` |
-| vLLM base | `local-inference-lab/vllm dev/dark-devotion @ 4e4a0b91a73d474374e8e5da528a24bb6a16b0eb` |
-| vLLM fix | PR #31, `79f154c998acd315bd999c8909cfc24085c23f85` |
-| B12X | `voipmonitor/b12x codex/w4a16-modelopt-packed-micro-scales-20260622 @ aecc88fa7eee17e3d2f1ac9591b2285ad54fc849` |
+| vLLM package | `0.11.2.dev279+dark.devotion.release.ec65667.b12xaaf1891.fi9c5ed7c.cu132.20260622` |
+| vLLM base | `local-inference-lab/vllm codex/dark-devotion-release-20260622 @ ec656676100a756912d6966c4232ea436c55d792` |
+| vLLM fixes | dark-devotion release stack including the DCP global-top-k/MTP path |
+| B12X | `voipmonitor/b12x codex/dark-devotion-pr14-pr15-20260622 @ aaf1891861ab86e78561326f13156d69a51a3ed8` |
 | FlashInfer | `9c5ed7c194e7412780862491742fc655daaad6ac` |
 | PyTorch | `2.12.0+cu132` |
 | CUDA / cuBLAS | CUDA `13.2.x`, cuBLAS runtime `13.4.1.2` |
 | NCCL | local inference NCCL `2.30.4` |
-| Docker build repo | `local-inference-lab/blackwell-llm-docker @ b6575930ca06293059cb2e96ecaf41ffd6d414bb` |
+| Docker build repo | `local-inference-lab/blackwell-llm-docker @ 9eeb368feb3b1db7a9a0e2379cc443de2495509f` |
 
 The image is a clean Docker build, not a runtime overlay.
 
@@ -35,13 +35,13 @@ The image is a clean Docker build, not a runtime overlay.
 Build repository:
 
 ```text
-https://github.com/local-inference-lab/blackwell-llm-docker @ b6575930ca06293059cb2e96ecaf41ffd6d414bb
+https://github.com/local-inference-lab/blackwell-llm-docker @ 9eeb368feb3b1db7a9a0e2379cc443de2495509f
 ```
 
 Build script used:
 
 ```text
-/root/vllm/blackwell-llm-docker/build-dark-devotion-pr31-pr15-w4a16scale-cu132.sh
+/root/vllm/blackwell-llm-docker/build-dark-devotion-release-20260622-cu132.sh
 ```
 
 Exact build invocation:
@@ -49,21 +49,21 @@ Exact build invocation:
 ```bash
 cd /root/vllm/blackwell-llm-docker
 
-IMAGE=voipmonitor/vllm:glm52-dark-devotion-pr31-pr15-w4a16scale-vllm79f154c-b12xaecc88f-cu132-20260622 \
+IMAGE=voipmonitor/vllm:glm52-dark-devotion-release-vllmec65667-b12xaaf1891-scale-fix-cu132-20260622 \
 BUILD_BASE_IMAGE=0 PUSH_BASE_IMAGE=0 \
 SYSTEM_BASE_IMAGE=voipmonitor/vllm:glm-kimi-cu132-system-base-20260608 \
 BUILD_BASE_IMAGE_TAG=voipmonitor/vllm:glm-kimi-cu132-build-base-20260608 \
 FLASHINFER_REF=main \
 FLASHINFER_COMMIT=9c5ed7c194e7412780862491742fc655daaad6ac \
 B12X_REPO=https://github.com/voipmonitor/b12x.git \
-B12X_REF=codex/w4a16-modelopt-packed-micro-scales-20260622 \
-B12X_COMMIT=aecc88fa7eee17e3d2f1ac9591b2285ad54fc849 \
-VLLM_REF=codex/dark-devotion-dcp4-mtp3-globaltopk-fix-20260621 \
-VLLM_COMMIT=79f154c998acd315bd999c8909cfc24085c23f85 \
-LAUNCHER_REF=codex/dark-devotion-dcp4-mtp3-globaltopk-fix-20260621 \
-LAUNCHER_COMMIT=79f154c998acd315bd999c8909cfc24085c23f85 \
-VLLM_BUILD_VERSION=0.11.2.dev279+dark.devotion.pr31.pr15.w4a16scale.79f154c.b12xaecc88f.fi9c5ed7c.cu132.20260622 \
-./build-dark-devotion-pr31-pr15-w4a16scale-cu132.sh
+B12X_REF=codex/dark-devotion-pr14-pr15-20260622 \
+B12X_COMMIT=aaf1891861ab86e78561326f13156d69a51a3ed8 \
+VLLM_REF=codex/dark-devotion-release-20260622 \
+VLLM_COMMIT=ec656676100a756912d6966c4232ea436c55d792 \
+LAUNCHER_REF=codex/dark-devotion-release-20260622 \
+LAUNCHER_COMMIT=ec656676100a756912d6966c4232ea436c55d792 \
+VLLM_BUILD_VERSION=0.11.2.dev279+dark.devotion.release.ec65667.b12xaaf1891.fi9c5ed7c.cu132.20260622 \
+./build-dark-devotion-release-20260622-cu132.sh
 ```
 
 ## Model
@@ -119,7 +119,7 @@ editing the command.
 ```yaml
 services:
   glm52:
-    image: ${IMAGE:-voipmonitor/vllm:glm52-dark-devotion-pr31-pr15-w4a16scale-vllm79f154c-b12xaecc88f-cu132-20260622}
+    image: ${IMAGE:-voipmonitor/vllm:glm52-dark-devotion-release-vllmec65667-b12xaaf1891-scale-fix-cu132-20260622}
     container_name: ${NAME:-glm52-v12}
     network_mode: host
     ipc: host
@@ -179,7 +179,7 @@ services:
       TP_SIZE: ${TP_SIZE:-8}
       DCP_SIZE: ${DCP_SIZE:-4}
       MTP_TOKENS: ${MTP_TOKENS:-3}
-      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.88}
+      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.955}
       MAX_MODEL_LEN: ${MAX_MODEL_LEN:-256000}
       MAX_NUM_SEQS: ${MAX_NUM_SEQS:-32}
       MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-8192}
@@ -289,7 +289,7 @@ docker run -d \
   -e FLASHINFER_WORKSPACE_BASE=/cache/jit/flashinfer \
   -e XDG_CACHE_HOME=/cache/jit \
   --entrypoint bash \
-  voipmonitor/vllm:glm52-dark-devotion-pr31-pr15-w4a16scale-vllm79f154c-b12xaecc88f-cu132-20260622 \
+  voipmonitor/vllm:glm52-dark-devotion-release-vllmec65667-b12xaaf1891-scale-fix-cu132-20260622 \
   -lc 'set -euo pipefail
     unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS VLLM_PREFIX_CACHE_RETENTION_INTERVAL
     MODEL=/root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522
@@ -307,7 +307,7 @@ docker run -d \
       --load-format fastsafetensors \
       --async-scheduling \
       -cc.pass_config.fuse_allreduce_rms=True \
-      --gpu-memory-utilization 0.88 \
+      --gpu-memory-utilization 0.955 \
       --max-num-batched-tokens 8192 \
       --max-num-seqs 32 \
       --max-cudagraph-capture-size 128 \
@@ -327,35 +327,32 @@ compose recipe.
 
 ## Speed Results
 
-The full sweep tables below were measured on the previous v12 PR31/`tp6odd16`
-image before B12X PR #15. PR #15 changes W4A16 scale storage and the small-M
-micro tiling; it was validated with the clean-image coding smoke immediately
-below, but the full sweep has not been rerun end-to-end on the PR15 image.
+The full sweep tables below are the current v12 baseline for the PR31 DCP
+global-top-k path. The release image above adds the B12X packed-scale memory fix
+and keeps the same runtime semantics; the clean-image smoke and KV checks below
+were rerun on the release image.
 
-Full sweep settings:
+Full sweep settings used for the tables:
 
 ```text
 TP=8, max_model_len=256000, max_num_seqs=32, max_cudagraph_capture_size=128,
 max_num_batched_tokens=8192, gpu_memory_utilization=0.88, FP8 KV, B12X A16 MoE.
 ```
 
-The `79f154c` rebuild only changes the DCP warmup barrier implementation from a
-direct device-group/NCCL barrier to `dcp_group.barrier()`. A bounded smoke run on
-DCP4/MTP3 with the debug scheduler profile (`max_num_seqs=4`,
-`max_cudagraph_capture_size=24`) produced 15 complete `/mnt/test.py -L`
-samples with generation-only mean `123.52 tok/s`, median `122.98 tok/s`, and
-CJK `0/15`. The earlier same-profile reference was about `119.96 tok/s` mean /
-`120.27 tok/s` median, so the barrier fix did not introduce a measurable decode
-regression.
-
-The `aecc88f` B12X update reuses the packed W4A16 ModelOpt E4M3/K16 scale
-layout instead of retaining the native NVFP4 scale grids for the small-M direct
-path. Clean-image TP8/DCP1/A16/no-MTP smoke on GPUs 8-15 with
-`max_num_seqs=1`, graph capture `4`, `gpu_memory_utilization=0.94`, and
-`max_model_len=262144` loaded at `55.01 GiB/GPU`, reported `649,600` KV tokens,
-and produced seven `/mnt/test.py -L` generation-only samples:
+The release image B12X update reuses packed W4A16 ModelOpt E4M3/K16 scale
+layout instead of retaining native NVFP4 scale grids for the forced-A16 path.
+It also keeps the legacy E4M3 scale decode path for non-A16 mode. Clean-image
+TP8/DCP1/no-MTP smoke on the release image with `max_num_seqs=1`, graph capture
+`4`, and `gpu_memory_utilization=0.94` produced coherent output for both
+`B12X_MOE_FORCE_A16=0` and `B12X_MOE_FORCE_A16=1`. The A16 path loaded at
+`55.01 GiB/GPU` with `649,600` KV tokens and seven `/mnt/test.py -L` samples:
 mean `77.41 tok/s`, median `77.36 tok/s`, min/max `77.32/77.53 tok/s`, CJK
-`0/7`. This matches the pre-PR15 decode baseline while preserving the VRAM win.
+`0/7`.
+
+The production launch profile now uses `gpu_memory_utilization=0.955` for a
+larger KV cache. This is intentionally aggressive: TP8/DCP4/MTP3/A16 leaves
+roughly 0.7 GiB/GPU after graph capture on RTX PRO 6000 Blackwell. Use `0.94`
+if the host has extra background VRAM use or you need more operational margin.
 
 Benchmark command:
 
@@ -391,16 +388,44 @@ python3 /root/llm-inference-bench/llm_decode_bench.py --port 5543
 
 ### Startup KV Cache
 
-| DCP | MTP | GPU KV cache tokens | Max concurrency at 256k |
-|---|---:|---:|---:|
-| 1 | off | 431,168 | 1.68x |
-| 1 | 3 | 403,328 | 1.58x |
-| 2 | off | 856,832 | 3.35x |
-| 2 | 3 | 798,848 | 3.12x |
-| 4 | off | 1,713,664 | 6.69x |
-| 4 | 3 | 1,597,696 | 6.24x |
-| 8 | off | 3,411,968 | 13.33x |
-| 8 | 3 | 3,075,072 | 12.01x |
+Release-image TP8 startup profile:
+
+```text
+TP=8, MTP=3, B12X_MOE_FORCE_A16=1, max_model_len=256000,
+max_num_seqs=32, max_cudagraph_capture_size=128,
+max_num_batched_tokens=8192, gpu_memory_utilization=0.955, FP8 KV.
+```
+
+| TP | DCP | MTP | `gpu_memory_utilization` | GPU KV cache tokens | Max concurrency at 256k | Source |
+|---:|---:|---:|---:|---:|---:|---|
+| 8 | 1 | 3 | 0.955 | ~642,944 | ~2.51x | estimated from DCP4 and measured DCP ratios |
+| 8 | 2 | 3 | 0.955 | ~1,279,616 | ~5.00x | estimated from DCP4 and measured DCP ratios |
+| 8 | 4 | 3 | 0.955 | 2,559,232 | 10.00x | measured |
+| 8 | 8 | 3 | 0.955 | ~5,052,416 | ~19.74x | estimated from DCP4 and measured DCP ratios |
+
+The TP8/DCP4/MTP3/A16 `0.955` run completed CUDA graph capture and an explicit
+240k prompt request without OOM:
+
+```text
+prompt_tokens=240,025, completion_tokens=1, TTFT=84.971s
+```
+
+The safer `0.94` TP8/DCP4/MTP3/A16 profile measured `2,448,128` KV tokens and
+also completed the 240k prompt request. Its 128k prefill benchmark was:
+
+```text
+128,879 prompt tokens, TTFT=44.24s, prefill=2,913 tok/s
+```
+
+Historical `0.88` startup measurements from the earlier v12 profile are useful
+when a host needs more VRAM headroom:
+
+| TP | DCP | MTP | `gpu_memory_utilization` | GPU KV cache tokens | Max concurrency at 256k |
+|---:|---:|---:|---:|---:|---:|
+| 8 | 1 | 3 | 0.88 | 508,224 | 1.99x |
+| 8 | 2 | 3 | 0.88 | 1,011,456 | 3.95x |
+| 8 | 4 | 3 | 0.88 | 2,022,912 | 7.90x |
+| 8 | 8 | 3 | 0.88 | 3,993,600 | 15.60x |
 
 ### Coding Peak
 
@@ -418,19 +443,20 @@ five runs by default.
 
 ### TP6 Launch Profiles
 
-TP6 supports DCP values that divide TP6: `1`, `2`, `3`, and `6`. Use the same
-compose file and override `TP_SIZE`, `DCP_SIZE`, and `MTP_TOKENS`:
+TP6 supports DCP values that divide TP6: `1`, `2`, `3`, and `6`. Use host GPUs
+`8-13` in these examples only to keep them isolated from an existing TP8
+service. On a normal host, use any six visible GPUs.
 
 ```bash
-# TP6 / DCP6 / MTP3 on host GPUs 8-13
+# TP6 / DCP6 / MTP3 KV-discovery profile
 CUDA_VISIBLE_DEVICES=8,9,10,11,12,13 \
 TP_SIZE=6 DCP_SIZE=6 MTP_TOKENS=3 \
 PORT=5538 \
 GPU_MEMORY_UTILIZATION=0.97 \
-MAX_MODEL_LEN=128000 \
-MAX_NUM_SEQS=16 \
-MAX_NUM_BATCHED_TOKENS=2048 \
-MAX_CUDAGRAPH_CAPTURE_SIZE=64 \
+MAX_MODEL_LEN=-1 \
+MAX_NUM_SEQS=32 \
+MAX_NUM_BATCHED_TOKENS=8192 \
+MAX_CUDAGRAPH_CAPTURE_SIZE=128 \
 docker compose -f glm52-v12.compose.yaml up -d
 
 # TP6 / DCP6 / MTP1
@@ -438,10 +464,10 @@ CUDA_VISIBLE_DEVICES=8,9,10,11,12,13 \
 TP_SIZE=6 DCP_SIZE=6 MTP_TOKENS=1 \
 PORT=5538 \
 GPU_MEMORY_UTILIZATION=0.97 \
-MAX_MODEL_LEN=128000 \
-MAX_NUM_SEQS=16 \
-MAX_NUM_BATCHED_TOKENS=2048 \
-MAX_CUDAGRAPH_CAPTURE_SIZE=64 \
+MAX_MODEL_LEN=-1 \
+MAX_NUM_SEQS=32 \
+MAX_NUM_BATCHED_TOKENS=8192 \
+MAX_CUDAGRAPH_CAPTURE_SIZE=128 \
 docker compose -f glm52-v12.compose.yaml up -d
 
 # Same run without forced A16 MoE
@@ -450,39 +476,47 @@ TP_SIZE=6 DCP_SIZE=6 MTP_TOKENS=3 \
 B12X_MOE_FORCE_A16=0 \
 PORT=5538 \
 GPU_MEMORY_UTILIZATION=0.97 \
-MAX_MODEL_LEN=128000 \
-MAX_NUM_SEQS=16 \
-MAX_NUM_BATCHED_TOKENS=2048 \
-MAX_CUDAGRAPH_CAPTURE_SIZE=64 \
+MAX_MODEL_LEN=-1 \
+MAX_NUM_SEQS=32 \
+MAX_NUM_BATCHED_TOKENS=8192 \
+MAX_CUDAGRAPH_CAPTURE_SIZE=128 \
 docker compose -f glm52-v12.compose.yaml up -d
 ```
 
 For DCP1/DCP2/DCP3, change only `DCP_SIZE`. For no-MTP runs, set
-`MTP_TOKENS=0`.
+`MTP_TOKENS=0`. For production serving, replace `MAX_MODEL_LEN=-1` with the
+context length you want to expose.
 
-Historical TP6/DCP6 KV budget measurement from the previous `tp6odd16` image,
-host GPUs `8-13`, FP8 KV, `max_model_len=128000`, `max_num_seqs=16`,
-`max_cudagraph_capture_size=64`, `max_num_batched_tokens=2048`,
-`gpu_memory_utilization=0.97`:
+Release-image TP6/MTP3/A16 KV budget measurement, host GPUs `8-13`, FP8 KV,
+`max_model_len=-1`, `max_num_seqs=32`, `max_cudagraph_capture_size=128`,
+`max_num_batched_tokens=8192`, `gpu_memory_utilization=0.97`:
 
-| TP | DCP | MTP | `B12X_MOE_FORCE_A16` | Model load per GPU | GPU KV cache tokens | Max concurrency at 128k |
-|---:|---:|---:|---:|---:|---:|---:|
-| 6 | 6 | 3 | 1 | 89.5 GiB | 214,227 | 1.67x |
-| 6 | 6 | 1 | 1 | 89.5 GiB | 214,227 | 1.67x |
-| 6 | 6 | 3 | 0 | 81.49 GiB | 1,162,347 | 9.08x |
-| 6 | 6 | 1 | 0 | 81.49 GiB | 1,162,730 | 9.08x |
+| TP | DCP | MTP | `B12X_MOE_FORCE_A16` | Model load per GPU | GPU KV cache tokens |
+|---:|---:|---:|---:|---:|---:|
+| 6 | 1 | 3 | 1 | 81.65 GiB | 170,304 |
+| 6 | 2 | 3 | 1 | 81.90 GiB | 335,744 |
+| 6 | 3 | 3 | 1 | 82.02 GiB | 503,616 |
+| 6 | 6 | 3 | 1 | 82.27 GiB | 1,007,232 |
 
-In the previous image, MTP1 vs MTP3 did not materially change KV capacity. The
-large A16 VRAM difference was the scale-grid retention fixed by B12X PR #15.
-A focused PR15 TP6/DCP6/MTP3 memory check with low `max_model_len` loaded at
-`81.49 GiB/GPU` with `1,029,461` KV tokens, so the old A16 rows above should not
-be used as PR15 capacity guidance.
+Estimated TP6/MTP3/A16 KV budget at `gpu_memory_utilization=0.955`, extrapolated
+from the measured `0.97` runs:
 
-### TP6 Debug Smoke
+| TP | DCP | MTP | `gpu_memory_utilization` | Estimated GPU KV cache tokens |
+|---:|---:|---:|---:|---:|
+| 6 | 1 | 3 | 0.955 | ~141,632 |
+| 6 | 2 | 3 | 0.955 | ~278,528 |
+| 6 | 3 | 3 | 0.955 | ~417,792 |
+| 6 | 6 | 3 | 0.955 | ~835,584 |
 
-The `tp6odd16` image also includes the B12X GLM odd-16-head prefill split needed
-for TP6 DCP layouts. This was validated as a startup/coherence smoke test, not a
-full throughput sweep:
+The earlier large A16 VRAM penalty is fixed in this release image. Current
+TP6/DCP6/MTP3/A16 model load is about `82.27 GiB/GPU`, not the old
+`89.5 GiB/GPU` value.
+
+### Historical Reduced TP6 Debug Smoke
+
+The previous `tp6odd16` image first validated the B12X GLM odd-16-head prefill
+split needed for TP6 DCP layouts. This is historical smoke-test data; use the
+release-image KV table above for current capacity planning.
 
 ```text
 TP=6, DCP=3 or 6, MTP=3, max_model_len=24576, max_num_seqs=1,
@@ -500,8 +534,8 @@ Result:
 DCP3 MTP acceptance windows were roughly `0.84-0.98 / 0.63-0.96 / 0.48-0.90`.
 DCP6 examples were about `0.92 / 0.80 / 0.68`.
 
-Use the same reduced scheduler settings for TP6/DCP6 debugging. Use the TP8
-recipe above for production DCP1/2/4/8 runs until TP6 has a full sweep.
+Use the reduced scheduler settings only for fast debugging. Use the TP8 recipe
+above for production DCP1/2/4/8 runs; TP6 still needs a full throughput sweep.
 
 ## KLD
 
