@@ -555,16 +555,7 @@ https://github.com/local-inference-lab/vllm/pull/32
 It adds `SamplingParams.return_prompt_logits` and `return_sample_logits` so KLD
 capture does not need ad-hoc local patches.
 
-### Historical Single-Run Baselines
-
-| Checkpoint/runtime | Prefill mean KLD | Decode KL model->BF16 | Decode KL BF16->model | Decode JS | Token match |
-|---|---:|---:|---:|---:|---:|
-| v12 NVFP4 B12X A16 | 0.0705969 | 0.000005873 | 0.000007896 | 0.000001629 | 17/17 |
-| v11 NVFP4 B12X A16 | 0.067532 | 0.000009892 | 0.000013952 | 0.000002845 | 17/17 |
-| v11 official FP8 | 0.079041 | 0.000085952 | 0.000045639 | 0.000011247 | 17/17 |
-| v11 MXFP8 | 0.018720 | 0.000012423 | 0.000015746 | 0.000003378 | 17/17 |
-
-### Repeated Checkpoint Comparison
+### Consolidated Checkpoint Comparison
 
 This comparison uses the same KLD references and request shape for all
 checkpoints:
@@ -584,11 +575,13 @@ Luke NVFP4 and the W8+Luke-NVFP4 hybrids use `moe_backend=b12x`,
 `moe_backend=auto`, expert parallel enabled, and `gpu_memory_utilization=0.55`;
 the higher `0.86` setting OOMs in the prompt-logprob Triton kernel.
 
-The run was repeated three times per checkpoint. Prefill compares 2047 prompt
-positions against the BF16 reference. Decode compares the 16 generated
-teacher-forced positions against the BF16 decode reference. Values are
-`mean +- sample stdev`; lower is better. All decode runs produced the same token
-IDs as the BF16 reference.
+The current NVFP4/QuantTrio rows were repeated three times per checkpoint.
+The v11 official FP8 and v11 MXFP8 rows are historical single-run measurements
+from the v11 page. Prefill compares 2047 prompt positions against the BF16
+reference. Decode compares the 16 generated teacher-forced positions against
+the BF16 decode reference. Lower is better for every KLD/JS column. Checkpoint
+size is the logical size of model files, following HF snapshot symlinks where
+applicable.
 
 Read the table left-to-right:
 
@@ -601,11 +594,33 @@ Read the table left-to-right:
   from the BF16 distribution. If this is high, the quantized model is assigning
   too little probability to tokens BF16 considered likely.
 
-| Rank | Checkpoint | Prefill KLD | Decode JS | Decode KL model->BF16 | Decode KL BF16->model | Read |
-|---:|---|---:|---:|---:|---:|---|
-| 1 | Luke NVFP4 | **0.068257 +- 0.000620** | **0.00000236 +- 0.00000049** | **0.00000852 +- 0.00000144** | **0.00001106 +- 0.00000307** | Best overall in this test |
-| 2 | QuantTrio GLM-5.2 Int4-Int8Mix | 0.070448 +- 0.001418 | 0.00000286 +- 0.00000078 | 0.00001125 +- 0.00000292 | 0.00001285 +- 0.00000447 | Close, but worse than Luke on every mean |
-| 3 | QuantTrio W8 + Luke NVFP4 experts | 0.071182 +- 0.002090 | 0.00000264 +- 0.00000138 | 0.00000921 +- 0.00000461 | 0.00001318 +- 0.00000744 | Hybrid does not clearly beat clean QuantTrio; variance overlaps |
+| Checkpoint | Size | Runs | Prefill KLD | Decode JS | Decode KL model->BF16 | Decode KL BF16->model | Read |
+|---|---:|---:|---:|---:|---:|---:|---|
+| v11 MXFP8 | 736.4 GiB | 1 | **0.018720** | 0.00000338 | 0.00001242 | 0.00001575 | Best prefill by far, but very large and not best decode |
+| Luke NVFP4 | 435.0 GiB | 3 | 0.068257 +- 0.000620 | **0.00000236 +- 0.00000049** | **0.00000852 +- 0.00000144** | **0.00001106 +- 0.00000307** | Best current practical balance |
+| QuantTrio GLM-5.2 Int4-Int8Mix | **377.7 GiB** | 3 | 0.070448 +- 0.001418 | 0.00000286 +- 0.00000078 | 0.00001125 +- 0.00000292 | 0.00001285 +- 0.00000447 | Smallest checkpoint; close to Luke but worse on every mean |
+| QuantTrio W8 + Luke NVFP4 experts | 409.3 GiB | 3 | 0.071182 +- 0.002090 | 0.00000264 +- 0.00000138 | 0.00000921 +- 0.00000461 | 0.00001318 +- 0.00000744 | Hybrid does not clearly beat clean QuantTrio; variance overlaps |
+| v11 official FP8 | 703.8 GiB | 1 | 0.079041 | 0.00001125 | 0.00008595 | 0.00004564 | Worst KLD here and much larger |
+
+Visual summary:
+
+```text
+Prefill KLD, lower is better. Bar scale ~= 0.0025 KLD.
+
+v11 MXFP8                         0.018720 | #######
+Luke NVFP4                        0.068257 | ###########################
+QuantTrio Int4-Int8Mix            0.070448 | ############################
+W8 + Luke NVFP4 experts           0.071182 | ############################
+v11 official FP8                  0.079041 | ################################
+
+Decode JS, lower is better. Bar scale ~= 0.0000005 JS.
+
+Luke NVFP4                        0.00000236 | #####
+W8 + Luke NVFP4 experts           0.00000264 | #####
+QuantTrio Int4-Int8Mix            0.00000286 | ######
+v11 MXFP8                         0.00000338 | #######
+v11 official FP8                  0.00001125 | ######################
+```
 
 Checkpoint paths used:
 
@@ -618,6 +633,12 @@ QuantTrio GLM-5.2 Int4-Int8Mix:
 
 QuantTrio W8 + Luke NVFP4 experts:
 /root/kld/checkpoints/GLM-5.2-QuantTrio-W8-PLUS-LUKE-NVFP4-EXPERTS-20260622
+
+v11 official FP8:
+/root/.cache/huggingface/hub/models--zai-org--GLM-5.2-FP8/snapshots/7d81a3f0fafa592d2b5317edcfd5bad32561f607
+
+v11 MXFP8:
+/root/kld/checkpoints/GLM-5.2-MXFP8-FULL-L3-77-FROM-LUKE-NVFP4-20260618
 ```
 
 Local v12 KLD artifacts:
