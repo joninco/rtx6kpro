@@ -669,6 +669,71 @@ Significance:
   a single historical run on a different checkpoint/runtime lineage; it needs a
   repeated rerun before using it as a firm ranking claim.
 
+### NVFP4 vs QuantTrio INT4/INT8
+
+The quality difference is not just "4-bit versus 4-bit"; the quantization
+format, scale granularity, calibrated layer set, and MoE routing coverage all
+matter.
+
+Luke NVFP4:
+
+- Uses NVIDIA ModelOpt NVFP4 for the non-shared MoE expert MLP projections.
+- NVFP4 is a floating-point FP4 format with FP8/E4M3 scales on small 16-value
+  blocks plus a higher-level scale. NVIDIA presents this as lower quantization
+  error than coarser FP4/MXFP4-style scaling because the scale can fit local
+  tensor ranges more closely.
+- The Luke model card states that attention, early dense MLP layers, and shared
+  experts are left unquantized, while the non-shared experts are quantized.
+  This targets the dominant MoE parameter mass while avoiding some sensitive
+  dense/shared paths.
+- Its calibration uses natural top-k routing and broad sample coverage, which
+  is important for MoE: each expert should see distributions close to what it
+  will process at inference time.
+
+QuantTrio `Int4-Int8Mix`:
+
+- The local checkpoint config uses `compressed-tensors` packed integer
+  quantization.
+- Non-shared experts are `W4A16`: 4-bit signed integer weights, symmetric group
+  quantization, group size 128, activations left high precision.
+- Dense attention/MLP/shared paths are mostly `W8A16`: 8-bit signed integer
+  weights with group size 128; the MTP layer uses channel-wise INT8 for its
+  W8A16 group.
+- This is compact and simple, but an INT4 group of 128 values has less local
+  scale flexibility than NVFP4's 16-value FP4 blocks with FP8 scales. Outliers
+  or heterogeneous expert weight distributions can therefore cost more quality
+  unless the quantization recipe compensates well.
+
+Why KLD is not the only quality metric:
+
+- KLD/JS compares local next-token distributions against BF16 on a fixed prompt
+  and fixed decode trace. It is useful because it is sensitive and cheap, but it
+  is still a proxy.
+- MoE quality depends heavily on routing. A small KLD sample may not exercise
+  rare experts, long-tail domains, long-context routing changes, tool-calling
+  behavior, or reasoning-loop failure modes.
+- Decode KLD over 16 positions is especially noisy. It is good for catching
+  gross numerical breakage, but small differences can be within runtime
+  variance.
+- Deployment decisions should combine KLD with task-level tests such as coding
+  prompts, Estonia/LAVD/hotel-style long reasoning, tool calls, long-context
+  consistency, CJK/repetition watchdogs, MTP acceptance if MTP is used, and
+  throughput/VRAM measurements.
+- For this table, the strongest conclusion is narrow: Luke NVFP4 currently has
+  the best repeated local distribution match among the practical-size candidates.
+  It does not prove that Luke NVFP4 wins every downstream task.
+
+References:
+
+- NVIDIA NVFP4 overview:
+  `https://developer.nvidia.com/blog/introducing-nvfp4-for-efficient-and-accurate-low-precision-inference/`
+- NVIDIA TensorRT quantized types and INT4/NVFP4 behavior:
+  `https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/work-quantized-types.html`
+- Luke NVFP4 model card:
+  `https://huggingface.co/lukealonso/GLM-5.2-NVFP4`
+- Local QuantTrio config inspected:
+  `/root/.cache/huggingface/hub/models--QuantTrio--GLM-5.2-Int4-Int8Mix/snapshots/8677dbb545f2cb9825fcb76dff122963cf920065/config.json`
+
 Checkpoint paths used:
 
 ```text
