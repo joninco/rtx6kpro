@@ -555,7 +555,7 @@ https://github.com/local-inference-lab/vllm/pull/32
 It adds `SamplingParams.return_prompt_logits` and `return_sample_logits` so KLD
 capture does not need ad-hoc local patches.
 
-Current v12 NVFP4/B12X/A16 result:
+### Historical Single-Run Baselines
 
 | Checkpoint/runtime | Prefill mean KLD | Decode KL model->BF16 | Decode KL BF16->model | Decode JS | Token match |
 |---|---:|---:|---:|---:|---:|
@@ -564,10 +564,61 @@ Current v12 NVFP4/B12X/A16 result:
 | v11 official FP8 | 0.079041 | 0.000085952 | 0.000045639 | 0.000011247 | 17/17 |
 | v11 MXFP8 | 0.018720 | 0.000012423 | 0.000015746 | 0.000003378 | 17/17 |
 
+### Repeated Checkpoint Comparison
+
+This comparison uses the same runtime for all checkpoints:
+
+```text
+image=voipmonitor/vllm:glm52-dark-devotion-release-vllmec65667-b12xaaf1891-scale-fix-cu132-20260622
+TP=8, DCP=1, MTP=off, B12X_MOE_FORCE_A16=1, B12X_W4A16_TC_DECODE=1,
+attention_backend=B12X_MLA_SPARSE, moe_backend=b12x, kv_cache_dtype=fp8,
+gpu_memory_utilization=0.74, max_model_len=4096, max_num_seqs=1,
+max_num_batched_tokens=2048, enforce_eager, custom all-reduce disabled.
+```
+
+The run was repeated three times per checkpoint. Prefill compares 2047 prompt
+positions against the BF16 reference. Decode compares the 16 generated
+teacher-forced positions against the BF16 decode reference. Values are
+`mean +- sample stdev`; lower is better. All nine decode runs produced the same
+token IDs as the BF16 reference.
+
+| Checkpoint | Prefill KLD | Decode JS | Decode KL model->BF16 | Decode KL BF16->model | Decode token match |
+|---|---:|---:|---:|---:|---:|
+| Luke NVFP4 | 0.068257 +- 0.000620 | 2.355e-6 +- 4.865e-7 | 8.516e-6 +- 1.437e-6 | 1.106e-5 +- 3.070e-6 | 3/3 |
+| QuantTrio W8 + Luke NVFP4 experts | 0.071182 +- 0.002090 | 2.641e-6 +- 1.383e-6 | 9.214e-6 +- 4.609e-6 | 1.318e-5 +- 7.441e-6 | 3/3 |
+| QuantTrio W8 + Luke NVFP4 experts MTPFix | 0.073425 +- 0.001807 | 2.946e-6 +- 1.000e-6 | 1.017e-5 +- 3.557e-6 | 1.493e-5 +- 4.496e-6 | 3/3 |
+
+Checkpoint paths used:
+
+```text
+Luke NVFP4:
+/root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522
+
+QuantTrio W8 + Luke NVFP4 experts:
+/root/kld/checkpoints/GLM-5.2-QuantTrio-W8-PLUS-LUKE-NVFP4-EXPERTS-20260622
+
+QuantTrio W8 + Luke NVFP4 experts MTPFix:
+/root/kld/checkpoints/GLM-5.2-QuantTrio-W8-PLUS-LUKE-NVFP4-EXPERTS-20260622-mtpfix
+```
+
+The MTPFix checkpoint changes checkpoint metadata/config, not production vLLM
+code. It adds the GLM-5.2 MTP runtime fused-QKV projection name
+`mtp_block.self_attn.fused_qkv_a_proj` to the W8A16 quant target set, matching
+what vLLM creates from `q_a_proj` and `kv_a_proj_with_mqa` at runtime. No new
+serving Docker image is required for this fix beyond using the corrected
+checkpoint.
+
+The MTPFix upload target is:
+
+```text
+https://huggingface.co/festr2/GLM-5.2-W8-Plus-Luke-NVFP4-Experts-MTPFix
+```
+
 Local v12 KLD artifacts:
 
 ```text
 /root/kld/glm52_v12_kld_nvfp4_b12x_a16_20260621_144826
+/root/kld/glm52_kld_threeway_nvfp4_quanttrio_mtpfix_repeats_20260622_180845
 ```
 
 The BF16 reference upload script is:
@@ -576,9 +627,8 @@ The BF16 reference upload script is:
 /root/kld/upload_glm52_bf16_refs_to_hf.py
 ```
 
-Upload to Hugging Face is currently blocked because the available token for
-user `festr2` is read-only. A write token is required to create or update the
-reference-logits repository.
+The repeated-checkpoint KLD run used only the logits-export instrumentation for
+capture. Serving these checkpoints does not require a local vLLM overlay.
 
 ## Smoke Tests
 
