@@ -594,6 +594,25 @@ Read the table left-to-right:
   from the BF16 distribution. If this is high, the quantized model is assigning
   too little probability to tokens BF16 considered likely.
 
+Column interpretation and practical implications:
+
+- `Size` is checkpoint storage footprint, not runtime VRAM. It matters for
+  distribution, download time, and local disk pressure.
+- `Runs` tells whether the row is a repeated measurement or a historical
+  single-run baseline. Repeated rows are more reliable; single-run rows are
+  useful for orientation but should not be over-interpreted.
+- `Prefill KLD` measures prompt-position distribution drift versus BF16. This
+  is the best broad quality proxy here because it uses many positions.
+- `Decode JS` is a symmetric decode-distribution drift metric. It is easier to
+  compare than directional KL and is the main decode summary column.
+- `Decode KL model->BF16` highlights probability mass the quantized model puts
+  where BF16 puts less. Higher values can indicate extra probability on
+  non-BF16-preferred alternatives.
+- `Decode KL BF16->model` highlights probability mass the quantized model loses
+  from BF16-preferred tokens. Higher values can indicate under-confidence on
+  tokens BF16 would consider likely.
+- `Read` is the short operational conclusion, combining quality and size.
+
 | Checkpoint | Size | Runs | Prefill KLD | Decode JS | Decode KL model->BF16 | Decode KL BF16->model | Read |
 |---|---:|---:|---:|---:|---:|---:|---|
 | v11 MXFP8 | 736.4 GiB | 1 | **0.018720** | 0.00000338 | 0.00001242 | 0.00001575 | Best prefill by far, but very large and not best decode |
@@ -621,6 +640,34 @@ QuantTrio Int4-Int8Mix            0.00000286 | ######
 v11 MXFP8                         0.00000338 | #######
 v11 official FP8                  0.00001125 | ######################
 ```
+
+Short assessment:
+
+- Luke NVFP4 is the best current practical checkpoint in this comparison. It
+  has the best repeated decode metrics and the best repeated prefill KLD among
+  the production-sized candidates.
+- QuantTrio `Int4-Int8Mix` is the smallest checkpoint and is close enough that
+  the prefill gap versus Luke NVFP4 is modest, but it is worse on every repeated
+  mean metric.
+- `W8 + Luke NVFP4 experts` does not clearly improve over clean QuantTrio in
+  these repeated measurements. The decode differences overlap the observed
+  run-to-run variance, so this is not a strong quality win.
+- v11 MXFP8 has an unusually strong single-run prefill KLD, but it is much
+  larger and its decode JS is not better than Luke NVFP4. Treat it as an
+  interesting historical baseline, not an obvious deployment choice.
+- v11 official FP8 is both large and clearly worse on these KLD metrics.
+
+Significance:
+
+- The repeated rows have only `n=3`, so small decode differences around
+  `0.0000003-0.0000005` JS should be treated cautiously.
+- The gap between Luke NVFP4 and QuantTrio/W8 hybrids in prefill KLD is visible
+  but not huge compared with the measured standard deviations.
+- The official FP8 decode gap is large enough to be meaningful even as a
+  single-run baseline.
+- The v11 MXFP8 prefill result is dramatically lower than the others, but it is
+  a single historical run on a different checkpoint/runtime lineage; it needs a
+  repeated rerun before using it as a firm ranking claim.
 
 Checkpoint paths used:
 
