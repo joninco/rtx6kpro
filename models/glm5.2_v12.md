@@ -590,18 +590,22 @@ teacher-forced positions against the BF16 decode reference. Values are
 `mean +- sample stdev`; lower is better. All decode runs produced the same token
 IDs as the BF16 reference.
 
-| Checkpoint | Prefill KLD | Decode JS | Decode KL model->BF16 | Decode KL BF16->model | Decode token match |
-|---|---:|---:|---:|---:|---:|
-| Luke NVFP4 | 0.068257 +- 0.000620 | 2.355e-6 +- 4.865e-7 | 8.516e-6 +- 1.437e-6 | 1.106e-5 +- 3.070e-6 | 3/3 |
-| QuantTrio GLM-5.2 Int4-Int8Mix | 0.070448 +- 0.001418 | 2.864e-6 +- 7.783e-7 | 1.125e-5 +- 2.924e-6 | 1.285e-5 +- 4.474e-6 | 3/3 |
-| QuantTrio W8 + Luke NVFP4 experts | 0.071182 +- 0.002090 | 2.641e-6 +- 1.383e-6 | 9.214e-6 +- 4.609e-6 | 1.318e-5 +- 7.441e-6 | 3/3 |
-| QuantTrio W8 + Luke NVFP4 experts MTPFix | 0.073425 +- 0.001807 | 2.946e-6 +- 1.000e-6 | 1.017e-5 +- 3.557e-6 | 1.493e-5 +- 4.496e-6 | 3/3 |
+Read the table left-to-right:
 
-The two `W8 + Luke NVFP4 experts` rows have identical weights. `MTPFix` changes
-only `config.json`, adding the runtime `fused_qkv_a_proj` MTP projection name to
-the W8A16 quantization target regex. Because this KLD comparison runs with
-MTP off, the small differences between those two rows should be treated as
-run-to-run variance, not as a real model-quality delta.
+- `Prefill KLD` is the broadest signal here because it averages over 2047
+  prompt positions.
+- `Decode JS` is the easiest decode summary to compare because it is symmetric.
+- `Decode KL model->BF16` penalizes probability mass the quantized model adds
+  where BF16 does not.
+- `Decode KL BF16->model` penalizes probability mass the quantized model loses
+  from the BF16 distribution. If this is high, the quantized model is assigning
+  too little probability to tokens BF16 considered likely.
+
+| Rank | Checkpoint | Prefill KLD | Decode JS | Decode KL model->BF16 | Decode KL BF16->model | Read |
+|---:|---|---:|---:|---:|---:|---|
+| 1 | Luke NVFP4 | **0.068257 +- 0.000620** | **0.00000236 +- 0.00000049** | **0.00000852 +- 0.00000144** | **0.00001106 +- 0.00000307** | Best overall in this test |
+| 2 | QuantTrio GLM-5.2 Int4-Int8Mix | 0.070448 +- 0.001418 | 0.00000286 +- 0.00000078 | 0.00001125 +- 0.00000292 | 0.00001285 +- 0.00000447 | Close, but worse than Luke on every mean |
+| 3 | QuantTrio W8 + Luke NVFP4 experts | 0.071182 +- 0.002090 | 0.00000264 +- 0.00000138 | 0.00000921 +- 0.00000461 | 0.00001318 +- 0.00000744 | Hybrid does not clearly beat clean QuantTrio; variance overlaps |
 
 Checkpoint paths used:
 
@@ -614,22 +618,6 @@ QuantTrio GLM-5.2 Int4-Int8Mix:
 
 QuantTrio W8 + Luke NVFP4 experts:
 /root/kld/checkpoints/GLM-5.2-QuantTrio-W8-PLUS-LUKE-NVFP4-EXPERTS-20260622
-
-QuantTrio W8 + Luke NVFP4 experts MTPFix:
-/root/kld/checkpoints/GLM-5.2-QuantTrio-W8-PLUS-LUKE-NVFP4-EXPERTS-20260622-mtpfix
-```
-
-The MTPFix checkpoint changes checkpoint metadata/config, not production vLLM
-code. It adds the GLM-5.2 MTP runtime fused-QKV projection name
-`mtp_block.self_attn.fused_qkv_a_proj` to the W8A16 quant target set, matching
-what vLLM creates from `q_a_proj` and `kv_a_proj_with_mqa` at runtime. No new
-serving Docker image is required for this fix beyond using the corrected
-checkpoint.
-
-The MTPFix upload target is:
-
-```text
-https://huggingface.co/festr2/GLM-5.2-W8-Plus-Luke-NVFP4-Experts-MTPFix
 ```
 
 Local v12 KLD artifacts:
