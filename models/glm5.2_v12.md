@@ -566,33 +566,51 @@ capture does not need ad-hoc local patches.
 
 ### Repeated Checkpoint Comparison
 
-This comparison uses the same runtime for all checkpoints:
+This comparison uses the same KLD references and request shape for all
+checkpoints:
 
 ```text
 image=voipmonitor/vllm:glm52-dark-devotion-release-vllmec65667-b12xaaf1891-scale-fix-cu132-20260622
-TP=8, DCP=1, MTP=off, B12X_MOE_FORCE_A16=1, B12X_W4A16_TC_DECODE=1,
-attention_backend=B12X_MLA_SPARSE, moe_backend=b12x, kv_cache_dtype=fp8,
-gpu_memory_utilization=0.74, max_model_len=4096, max_num_seqs=1,
-max_num_batched_tokens=2048, enforce_eager, custom all-reduce disabled.
+TP=8, DCP=1, MTP=off, attention_backend=B12X_MLA_SPARSE,
+kv_cache_dtype=fp8, max_model_len=4096, max_num_seqs=1,
+max_num_batched_tokens=2048, enforce_eager, custom all-reduce disabled,
+prefill reference = BF16 ctx2048/s512, decode reference = BF16 teacher-forced
+ctx2048/t17.
 ```
+
+Luke NVFP4 and the W8+Luke-NVFP4 hybrids use `moe_backend=b12x`,
+`B12X_MOE_FORCE_A16=1`, and `gpu_memory_utilization=0.74`. The pure QuantTrio
+`Int4-Int8Mix` checkpoint uses its compressed-tensors path with
+`moe_backend=auto`, expert parallel enabled, and `gpu_memory_utilization=0.55`;
+the higher `0.86` setting OOMs in the prompt-logprob Triton kernel.
 
 The run was repeated three times per checkpoint. Prefill compares 2047 prompt
 positions against the BF16 reference. Decode compares the 16 generated
 teacher-forced positions against the BF16 decode reference. Values are
-`mean +- sample stdev`; lower is better. All nine decode runs produced the same
-token IDs as the BF16 reference.
+`mean +- sample stdev`; lower is better. All decode runs produced the same token
+IDs as the BF16 reference.
 
 | Checkpoint | Prefill KLD | Decode JS | Decode KL model->BF16 | Decode KL BF16->model | Decode token match |
 |---|---:|---:|---:|---:|---:|
 | Luke NVFP4 | 0.068257 +- 0.000620 | 2.355e-6 +- 4.865e-7 | 8.516e-6 +- 1.437e-6 | 1.106e-5 +- 3.070e-6 | 3/3 |
+| QuantTrio GLM-5.2 Int4-Int8Mix | 0.070448 +- 0.001418 | 2.864e-6 +- 7.783e-7 | 1.125e-5 +- 2.924e-6 | 1.285e-5 +- 4.474e-6 | 3/3 |
 | QuantTrio W8 + Luke NVFP4 experts | 0.071182 +- 0.002090 | 2.641e-6 +- 1.383e-6 | 9.214e-6 +- 4.609e-6 | 1.318e-5 +- 7.441e-6 | 3/3 |
 | QuantTrio W8 + Luke NVFP4 experts MTPFix | 0.073425 +- 0.001807 | 2.946e-6 +- 1.000e-6 | 1.017e-5 +- 3.557e-6 | 1.493e-5 +- 4.496e-6 | 3/3 |
+
+The two `W8 + Luke NVFP4 experts` rows have identical weights. `MTPFix` changes
+only `config.json`, adding the runtime `fused_qkv_a_proj` MTP projection name to
+the W8A16 quantization target regex. Because this KLD comparison runs with
+MTP off, the small differences between those two rows should be treated as
+run-to-run variance, not as a real model-quality delta.
 
 Checkpoint paths used:
 
 ```text
 Luke NVFP4:
 /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522
+
+QuantTrio GLM-5.2 Int4-Int8Mix:
+/root/.cache/huggingface/hub/models--QuantTrio--GLM-5.2-Int4-Int8Mix/snapshots/8677dbb545f2cb9825fcb76dff122963cf920065
 
 QuantTrio W8 + Luke NVFP4 experts:
 /root/kld/checkpoints/GLM-5.2-QuantTrio-W8-PLUS-LUKE-NVFP4-EXPERTS-20260622
@@ -619,6 +637,7 @@ Local v12 KLD artifacts:
 ```text
 /root/kld/glm52_v12_kld_nvfp4_b12x_a16_20260621_144826
 /root/kld/glm52_kld_threeway_nvfp4_quanttrio_mtpfix_repeats_20260622_180845
+/root/kld/glm52_kld_quanttrio_int4_int8mix_repeats_20260622_192140_gmem055
 ```
 
 The BF16 reference upload script is:
