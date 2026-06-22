@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-22](2026-06/2026-06-22.md) | GLM-5.2 v12 Docker released with DCP+MTP fixes, VLLM_DCP_SHARD_DRAFT=1 now default — peaks **160 t |
 | [2026-06-21](2026-06/2026-06-21.md) | GLM-5.2 REAP 504B aider polyglot benchmark: `pass_rate_2: 78.7` at "High" reasoning effort (225 test |
 | [2026-06-20](2026-06/2026-06-20.md) | GLM 5.2 DCP+MTP root cause fixed: MTP layers were replicated per DCP rank instead of sharded, breaki |
 | [2026-06-19](2026-06/2026-06-19.md) | GLM-5.2 NVFP4 on TP8 benchmarks: prefill 2,684 tok/s @ 8k ctx, 1,824 tok/s @ 128k ctx (200W power-li |
@@ -123,6 +124,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-22](2026-06/2026-06-22.md) | GLM-5.2 v12 Docker released with DCP+MTP fixes, VLLM_DCP_SHARD_DRAFT=1 now default — peaks **160 t |
 | [2026-06-21](2026-06/2026-06-21.md) | GLM-5.2 REAP 504B aider polyglot benchmark: `pass_rate_2: 78.7` at "High" reasoning effort (225 test |
 | [2026-06-20](2026-06/2026-06-20.md) | GLM 5.2 DCP+MTP root cause fixed: MTP layers were replicated per DCP rank instead of sharded, breaki |
 | [2026-06-19](2026-06/2026-06-19.md) | GLM-5.2 NVFP4 on TP8 benchmarks: prefill 2,684 tok/s @ 8k ctx, 1,824 tok/s @ 128k ctx (200W power-li |
