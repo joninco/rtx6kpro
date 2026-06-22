@@ -75,6 +75,31 @@ lukealonso/GLM-5.2-NVFP4
 /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522
 ```
 
+Experimental hybrid checkpoint:
+
+```text
+https://huggingface.co/festr2/GLM-5.2-Int8Mix-NVFP4
+festr2/GLM-5.2-Int8Mix-NVFP4
+```
+
+This checkpoint combines the QuantTrio `Int4-Int8Mix` W8A16 dense, attention,
+shared-expert, special-head, and MTP tensors with Luke's NVFP4 non-shared routed
+MoE expert tensors. It is not a clean re-quantization from BF16. It is a merged
+serving checkpoint with a `compressed-tensors` config using
+`format=nvfp4-pack-quantized`.
+
+Important runtime difference:
+
+- Luke NVFP4 uses `--quantization=modelopt_fp4`.
+- `festr2/GLM-5.2-Int8Mix-NVFP4` uses
+  `--quantization=compressed-tensors`.
+
+No extra vLLM PR was needed specifically for this hybrid checkpoint on top of
+the v12 image documented here. The required serving fix was done in checkpoint
+metadata: the config was adjusted to match vLLM's fused GLM-5.2 runtime module
+names for MTP (`mtp_block` / `fused_qkv_a_proj`). The v12 image already contains
+the B12X/vLLM runtime support needed by this stack.
+
 GLM-5.2 requires the index cache sparsity override until upstream vLLM picks the
 pattern from model config:
 
@@ -90,7 +115,7 @@ These are the important switches:
 |---|---|
 | `--attention-backend` | `B12X_MLA_SPARSE` |
 | `--moe-backend` | `b12x` |
-| `--quantization` | `modelopt_fp4` |
+| `--quantization` | `modelopt_fp4` for Luke NVFP4; `compressed-tensors` for the hybrid checkpoint |
 | `--kv-cache-dtype` | `fp8` |
 | `B12X_MOE_FORCE_A16` | `1` |
 | `B12X_W4A16_TC_DECODE` | `1` |
@@ -175,6 +200,8 @@ services:
       FLASHINFER_WORKSPACE_BASE: /cache/jit/flashinfer
       XDG_CACHE_HOME: /cache/jit
       MODEL: ${MODEL:-/root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522}
+      SERVED_MODEL_NAME: ${SERVED_MODEL_NAME:-GLM-5.2-NVFP4}
+      QUANTIZATION: ${QUANTIZATION:-modelopt_fp4}
       PORT: ${PORT:-5543}
       TP_SIZE: ${TP_SIZE:-8}
       DCP_SIZE: ${DCP_SIZE:-4}
@@ -197,7 +224,7 @@ services:
           SPEC_ARGS="--speculative-config {\"model\":\"$$MODEL\",\"method\":\"mtp\",\"num_speculative_tokens\":$$MTP_TOKENS,\"moe_backend\":\"b12x\",\"draft_sample_method\":\"probabilistic\"}"
         fi
         exec /opt/venv/bin/python -m vllm.entrypoints.cli.main serve "$$MODEL" \
-          --served-model-name GLM-5.2-NVFP4 \
+          --served-model-name "$$SERVED_MODEL_NAME" \
           --trust-remote-code \
           --host 0.0.0.0 \
           --port "$$PORT" \
@@ -223,7 +250,7 @@ services:
           --enable-auto-tool-choice \
           --reasoning-parser glm45 \
           --hf-overrides "$$HF_OVERRIDES" \
-          --quantization modelopt_fp4 \
+          --quantization "$$QUANTIZATION" \
           $$SPEC_ARGS
 ```
 
@@ -235,7 +262,17 @@ DCP_SIZE=1 MTP_TOKENS=0 PORT=5541 docker compose -f glm52-v12.compose.yaml up -d
 
 # DCP4, default MTP3
 DCP_SIZE=4 MTP_TOKENS=3 PORT=5543 docker compose -f glm52-v12.compose.yaml up -d
+
+# Hybrid checkpoint, DCP1, MTP3
+MODEL=festr2/GLM-5.2-Int8Mix-NVFP4 \
+SERVED_MODEL_NAME=GLM-5.2-Int8Mix-NVFP4 \
+QUANTIZATION=compressed-tensors \
+DCP_SIZE=1 MTP_TOKENS=3 PORT=5575 \
+docker compose -f glm52-v12.compose.yaml up -d
 ```
+
+For offline deployment, download the HF repo first and set `MODEL` to the local
+snapshot path instead of the repo id.
 
 ## Single Docker Run
 
@@ -324,6 +361,15 @@ docker run -d \
 
 For no-MTP runs, remove `--speculative-config ...` or set `MTP_TOKENS=0` in the
 compose recipe.
+
+To run the hybrid checkpoint with the single Docker command, change only these
+parts of the command above:
+
+```bash
+MODEL=festr2/GLM-5.2-Int8Mix-NVFP4
+--served-model-name GLM-5.2-Int8Mix-NVFP4
+--quantization compressed-tensors
+```
 
 ## Speed Results
 
@@ -618,7 +664,7 @@ Column interpretation and practical implications:
 | v11 MXFP8 | 736.4 GiB | 1 | **0.018720** | 0.00000338 | 0.00001242 | 0.00001575 | Best prefill by far, but very large and not best decode |
 | Luke NVFP4 | 435.0 GiB | 3 | 0.068257 +- 0.000620 | **0.00000236 +- 0.00000049** | **0.00000852 +- 0.00000144** | **0.00001106 +- 0.00000307** | Best current practical balance |
 | QuantTrio GLM-5.2 Int4-Int8Mix | **377.7 GiB** | 3 | 0.070448 +- 0.001418 | 0.00000286 +- 0.00000078 | 0.00001125 +- 0.00000292 | 0.00001285 +- 0.00000447 | Smallest checkpoint; close to Luke but worse on every mean |
-| QuantTrio W8 + Luke NVFP4 experts | 409.3 GiB | 3 | 0.071182 +- 0.002090 | 0.00000264 +- 0.00000138 | 0.00000921 +- 0.00000461 | 0.00001318 +- 0.00000744 | Hybrid does not clearly beat clean QuantTrio; variance overlaps |
+| `festr2/GLM-5.2-Int8Mix-NVFP4` | 409.3 GiB | 3 | 0.071182 +- 0.002090 | 0.00000264 +- 0.00000138 | 0.00000921 +- 0.00000461 | 0.00001318 +- 0.00000744 | Hybrid W8A16 + Luke NVFP4 experts; variance overlaps clean QuantTrio |
 | v11 official FP8 | 703.8 GiB | 1 | 0.079041 | 0.00001125 | 0.00008595 | 0.00004564 | Worst KLD here and much larger |
 
 Visual summary:
@@ -629,13 +675,13 @@ Prefill KLD, lower is better. Bar scale ~= 0.0025 KLD.
 v11 MXFP8                         0.018720 | #######
 Luke NVFP4                        0.068257 | ###########################
 QuantTrio Int4-Int8Mix            0.070448 | ############################
-W8 + Luke NVFP4 experts           0.071182 | ############################
+festr2 Int8Mix-NVFP4              0.071182 | ############################
 v11 official FP8                  0.079041 | ################################
 
 Decode JS, lower is better. Bar scale ~= 0.0000005 JS.
 
 Luke NVFP4                        0.00000236 | #####
-W8 + Luke NVFP4 experts           0.00000264 | #####
+festr2 Int8Mix-NVFP4              0.00000264 | #####
 QuantTrio Int4-Int8Mix            0.00000286 | ######
 v11 MXFP8                         0.00000338 | #######
 v11 official FP8                  0.00001125 | ######################
@@ -649,8 +695,8 @@ Short assessment:
 - QuantTrio `Int4-Int8Mix` is the smallest checkpoint and is close enough that
   the prefill gap versus Luke NVFP4 is modest, but it is worse on every repeated
   mean metric.
-- `W8 + Luke NVFP4 experts` does not clearly improve over clean QuantTrio in
-  these repeated measurements. The decode differences overlap the observed
+- `festr2/GLM-5.2-Int8Mix-NVFP4` does not clearly improve over clean QuantTrio
+  in these repeated measurements. The decode differences overlap the observed
   run-to-run variance, so this is not a strong quality win.
 - v11 MXFP8 has an unusually strong single-run prefill KLD, but it is much
   larger and its decode JS is not better than Luke NVFP4. Treat it as an
@@ -743,8 +789,9 @@ Luke NVFP4:
 QuantTrio GLM-5.2 Int4-Int8Mix:
 /root/.cache/huggingface/hub/models--QuantTrio--GLM-5.2-Int4-Int8Mix/snapshots/8677dbb545f2cb9825fcb76dff122963cf920065
 
-QuantTrio W8 + Luke NVFP4 experts:
-/root/kld/checkpoints/GLM-5.2-QuantTrio-W8-PLUS-LUKE-NVFP4-EXPERTS-20260622
+festr2 GLM-5.2 Int8Mix-NVFP4 hybrid:
+https://huggingface.co/festr2/GLM-5.2-Int8Mix-NVFP4
+/root/kld/checkpoints/GLM-5.2-QuantTrio-W8-PLUS-LUKE-NVFP4-EXPERTS-20260622-mtpfix
 
 v11 official FP8:
 /root/.cache/huggingface/hub/models--zai-org--GLM-5.2-FP8/snapshots/7d81a3f0fafa592d2b5317edcfd5bad32561f607
