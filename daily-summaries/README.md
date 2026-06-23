@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-23](2026-06/2026-06-23.md) | New Docker v12 fixes A16=1 VRAM bug, freeing 5–8GB/GPU; TP4 REAP KV cache jumps 400k → 1M tokens |
 | [2026-06-22](2026-06/2026-06-22.md) | GLM-5.2 v12 Docker released with DCP+MTP fixes, VLLM_DCP_SHARD_DRAFT=1 now default — peaks **160 t |
 | [2026-06-21](2026-06/2026-06-21.md) | GLM-5.2 REAP 504B aider polyglot benchmark: `pass_rate_2: 78.7` at "High" reasoning effort (225 test |
 | [2026-06-20](2026-06/2026-06-20.md) | GLM 5.2 DCP+MTP root cause fixed: MTP layers were replicated per DCP rank instead of sharded, breaki |
@@ -124,6 +125,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-23](2026-06/2026-06-23.md) | New Docker v12 fixes A16=1 VRAM bug, freeing 5–8GB/GPU; TP4 REAP KV cache jumps 400k → 1M tokens |
 | [2026-06-22](2026-06/2026-06-22.md) | GLM-5.2 v12 Docker released with DCP+MTP fixes, VLLM_DCP_SHARD_DRAFT=1 now default — peaks **160 t |
 | [2026-06-21](2026-06/2026-06-21.md) | GLM-5.2 REAP 504B aider polyglot benchmark: `pass_rate_2: 78.7` at "High" reasoning effort (225 test |
 | [2026-06-20](2026-06/2026-06-20.md) | GLM 5.2 DCP+MTP root cause fixed: MTP layers were replicated per DCP rank instead of sharded, breaki |
