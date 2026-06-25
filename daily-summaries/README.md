@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-25](2026-06/2026-06-25.md) | DS4F v5 accidentally pushed — has a known crash bug in the b12x path; lucifer path unaffected. Do  |
 | [2026-06-24](2026-06/2026-06-24.md) | GLM-5.2 REAP 504B Aider Polyglot final score: 89.8% pass_rate_2 after rerunning context-exhausted ca |
 | [2026-06-23](2026-06/2026-06-23.md) | New Docker v12 fixes A16=1 VRAM bug, freeing 5–8GB/GPU; TP4 REAP KV cache jumps 400k → 1M tokens |
 | [2026-06-22](2026-06/2026-06-22.md) | GLM-5.2 v12 Docker released with DCP+MTP fixes, VLLM_DCP_SHARD_DRAFT=1 now default — peaks **160 t |
@@ -126,6 +127,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-25](2026-06/2026-06-25.md) | DS4F v5 accidentally pushed — has a known crash bug in the b12x path; lucifer path unaffected. Do  |
 | [2026-06-24](2026-06/2026-06-24.md) | GLM-5.2 REAP 504B Aider Polyglot final score: 89.8% pass_rate_2 after rerunning context-exhausted ca |
 | [2026-06-23](2026-06/2026-06-23.md) | New Docker v12 fixes A16=1 VRAM bug, freeing 5–8GB/GPU; TP4 REAP KV cache jumps 400k → 1M tokens |
 | [2026-06-22](2026-06/2026-06-22.md) | GLM-5.2 v12 Docker released with DCP+MTP fixes, VLLM_DCP_SHARD_DRAFT=1 now default — peaks **160 t |
