@@ -7,23 +7,23 @@ A16, FP8 KV cache, vLLM V2 model runner, and optional MTP3.
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-enlightenment-v9e8b0ab-b12x21e5cd4-cu132-20260624
-voipmonitor/vllm@sha256:0158205fd17403dc755dbe34f76133edbbf2caa5c5bec4580aea99af2916bf9e
+voipmonitor/vllm:eldritch-fullstack-v420dbb3-b12x284a2ea-cu132-20260625
+voipmonitor/vllm@sha256:9ae47c52155c6d5079901a5fdc33d95f193c00971046cb0e5e43379290cfc007
 ```
 
 | Component | Revision |
 |---|---|
 | vLLM repo | `https://github.com/local-inference-lab/vllm.git` |
-| vLLM branch | `codex/eldritch-all-experiments-tp6fix-20260624` |
-| vLLM commit | `9e8b0abcfd1986415812f30cbcffe37e346e7755` |
-| B12X branch | `codex/eldritch-b12x-pr14-pr16-20260623` |
-| B12X commit | `21e5cd4d420b5ad5a68491416ae452599dbe0b5f` |
-| FlashInfer | `b3baedbbef2686df91b6dc43818ee56fe26ceba2` |
-| DeepGEMM | `14073b4e1e706506e193231209738c848d092a1f` |
+| vLLM branch | `codex/eldritch-fullstack-20260625` |
+| vLLM commit | `420dbb316c01d273a1bf6b9e5777d693a189c73d` |
+| B12X branch | `codex/eldritch-fullstack-20260625` |
+| B12X commit | `284a2eae83754ee1abd31c37b9ca66b68e20b8a8` |
+| FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
+| DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` |
 | CUDA / cuBLAS | CUDA `13.2.1`, cuBLAS `13.4.1.2-1` |
 | cuDNN / NCCL | cuDNN `9.22.0.52-1`, local NCCL `2.30.4` |
 | PyTorch | `2.12.0+cu132` |
-| Docker build helper | `/root/vllm/blackwell-llm-docker/build-eldritch-all-experiments-cu132.sh` |
+| Docker build helper | `/root/vllm/blackwell-llm-docker/build-eldritch-fullstack-cu132.sh` |
 
 The image is a clean Docker build, not a runtime overlay.
 
@@ -43,7 +43,10 @@ FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS
 ## Backend Choice
 
 For `DCP=1`, the fastest attention path is usually
-`FLASHINFER_MLA_SPARSE_SM120`. It is the preferred single-DCP prefill path.
+`FLASHINFER_MLA_SPARSE_SM120`. It is the preferred single-DCP path and should
+be launched with `-cc.pass_config.fuse_allreduce_rms=True`; without that pass,
+the same DCP1/SM120 recipe can drop from about `81-82 tok/s` to about
+`75 tok/s` on the coding smoke test.
 
 For `DCP>1`, use `B12X_MLA_SPARSE`. The FlashInfer SM120 sparse MLA path does
 not currently provide the DCP decode/LSE behavior we need, so DCP serving should
@@ -77,7 +80,7 @@ This compose file supports both DCP1/SM120 and DCP/B12X. Set `ATTN_BACKEND` to
 ```yaml
 services:
   glm52:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v9e8b0ab-b12x21e5cd4-cu132-20260624}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-fullstack-v420dbb3-b12x284a2ea-cu132-20260625}
     container_name: ${NAME:-glm52-v13}
     network_mode: host
     ipc: host
@@ -134,7 +137,7 @@ services:
       TP_SIZE: ${TP_SIZE:-8}
       DCP_SIZE: ${DCP_SIZE:-1}
       MTP_TOKENS: ${MTP_TOKENS:-3}
-      ATTN_BACKEND: ${ATTN_BACKEND:-B12X_MLA_SPARSE}
+      ATTN_BACKEND: ${ATTN_BACKEND:-FLASHINFER_MLA_SPARSE_SM120}
       GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.955}
       MAX_MODEL_LEN: ${MAX_MODEL_LEN:-262144}
       MAX_NUM_SEQS: ${MAX_NUM_SEQS:-32}
@@ -165,6 +168,7 @@ services:
           --attention-backend "$${ATTN_BACKEND}" \
           --moe-backend b12x \
           --load-format fastsafetensors \
+          -cc.pass_config.fuse_allreduce_rms=True \
           --gpu-memory-utilization "$${GPU_MEMORY_UTILIZATION}" \
           --max-model-len "$${MAX_MODEL_LEN}" \
           --max-num-seqs "$${MAX_NUM_SEQS}" \
@@ -181,9 +185,9 @@ services:
           "$${SPEC_ARGS[@]}"
 ```
 
-## Single Docker Run
+## Single Docker Run: DCP1 Fast Path
 
-DCP1 with SM120 attention and no MTP:
+DCP1 with SM120 attention, B12X MoE, A16 decode, and MTP3:
 
 ```bash
 docker rm -f glm52-v13 2>/dev/null || true
@@ -207,9 +211,14 @@ docker run -d --name glm52-v13 \
   -e VLLM_USE_V2_MODEL_RUNNER=1 \
   -e B12X_W4A16_TC_DECODE=1 \
   -e B12X_MOE_FORCE_A16=1 \
-  voipmonitor/vllm:eldritch-enlightenment-v9e8b0ab-b12x21e5cd4-cu132-20260624 \
-  /bin/bash -lc 'unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS; exec vllm serve /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522 --served-model-name GLM-5.2-NVFP4 --host 0.0.0.0 --port 8000 --trust-remote-code --tensor-parallel-size 8 --decode-context-parallel-size 1 --quantization modelopt_fp4 --kv-cache-dtype fp8 --attention-backend FLASHINFER_MLA_SPARSE_SM120 --moe-backend b12x --load-format fastsafetensors --gpu-memory-utilization 0.94 --max-model-len 262144 --max-num-seqs 32 --max-num-batched-tokens 8192 --max-cudagraph-capture-size 128 --async-scheduling --enable-chunked-prefill --enable-prefix-caching --enable-auto-tool-choice --tool-call-parser glm47 --reasoning-parser glm45 --default-chat-template-kwargs "{\"reasoning_effort\":\"high\"}" --hf-overrides "{\"use_index_cache\":true,\"index_topk_pattern\":\"FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS\"}"'
+  voipmonitor/vllm:eldritch-fullstack-v420dbb3-b12x284a2ea-cu132-20260625 \
+  /bin/bash -lc 'unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS; exec vllm serve /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522 --served-model-name GLM-5.2-NVFP4 --host 0.0.0.0 --port 8000 --trust-remote-code --tensor-parallel-size 8 --decode-context-parallel-size 1 --quantization modelopt_fp4 --kv-cache-dtype fp8 --attention-backend FLASHINFER_MLA_SPARSE_SM120 --moe-backend b12x --load-format fastsafetensors -cc.pass_config.fuse_allreduce_rms=True --gpu-memory-utilization 0.955 --max-model-len 262144 --max-num-seqs 32 --max-num-batched-tokens 8192 --max-cudagraph-capture-size 128 --async-scheduling --enable-chunked-prefill --enable-prefix-caching --enable-auto-tool-choice --tool-call-parser glm47 --reasoning-parser glm45 --default-chat-template-kwargs "{\"reasoning_effort\":\"high\"}" --hf-overrides "{\"use_index_cache\":true,\"index_topk_pattern\":\"FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS\"}" --speculative-config "{\"method\":\"mtp\",\"num_speculative_tokens\":3,\"moe_backend\":\"b12x\",\"draft_sample_method\":\"probabilistic\"}"'
 ```
+
+For a no-MTP baseline, remove the final `--speculative-config ...` argument.
+That baseline is useful because the DCP1/SM120 fast path should be around
+`81-82 tok/s` on `/mnt/test.py -L`; with MTP3 and normal acceptance it should
+be materially higher.
 
 DCP4 with B12X attention and MTP3: change
 `--decode-context-parallel-size 4`, `--attention-backend B12X_MLA_SPARSE`, add
@@ -229,9 +238,17 @@ larger graph cap.
 
 | Mode | Attention | MTP | KV cache tokens | Decode cc1 ctx0 tok/s | Prefill 8k tok/s | Prefill 64k tok/s |
 |---|---|---:|---:|---:|---:|---:|
-| TP8 DCP1 | `FLASHINFER_MLA_SPARSE_SM120` | off | 644,288 | 75.0 | 2,663 | 4,851 |
+| TP8 DCP1 | `FLASHINFER_MLA_SPARSE_SM120` + fused RMS/all-reduce | off | 682,624 | 81.4-82.0 | 2,663 | 4,851 |
+| TP8 DCP1 | `FLASHINFER_MLA_SPARSE_SM120` + fused RMS/all-reduce | 3 | not recorded | 128.0 | not rerun | not rerun |
 | TP8 DCP4 | `B12X_MLA_SPARSE` | off | 2,704,128 | 62.3 | 1,980 | 3,188 |
 | TP8 DCP4 | `B12X_MLA_SPARSE` | 3 | 2,579,456 | 70.6 | not rerun | not rerun |
+
+Warm DCP1 MTP3 acceptance examples were around:
+
+```text
+0.91 / 0.75 / 0.58
+0.94 / 0.81 / 0.66
+```
 
 Warm MTP3 acceptance examples for DCP4 were:
 
