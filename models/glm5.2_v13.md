@@ -7,15 +7,15 @@ A16, FP8 KV cache, vLLM V2 model runner, and optional MTP3.
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-fullstack-v420dbb3-b12x284a2ea-cu132-20260625
-voipmonitor/vllm@sha256:9ae47c52155c6d5079901a5fdc33d95f193c00971046cb0e5e43379290cfc007
+voipmonitor/vllm:eldritch-final-v0ec1381-b12x284a2ea-cu132-20260626
+voipmonitor/vllm@sha256:b48db4bb4b2fee9dfcef8285ca2766ee014039f708e963ab90e738cd2208c976
 ```
 
 | Component | Revision |
 |---|---|
 | vLLM repo | `https://github.com/local-inference-lab/vllm.git` |
-| vLLM branch | `codex/eldritch-fullstack-20260625` |
-| vLLM commit | `420dbb316c01d273a1bf6b9e5777d693a189c73d` |
+| vLLM branch | `codex/eldritch-final-20260626` |
+| vLLM commit | `0ec13810c9f71d10555cf5fc8c8f58c9325b0707` |
 | B12X branch | `codex/eldritch-fullstack-20260625` |
 | B12X commit | `284a2eae83754ee1abd31c37b9ca66b68e20b8a8` |
 | FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
@@ -23,7 +23,7 @@ voipmonitor/vllm@sha256:9ae47c52155c6d5079901a5fdc33d95f193c00971046cb0e5e433792
 | CUDA / cuBLAS | CUDA `13.2.1`, cuBLAS `13.4.1.2-1` |
 | cuDNN / NCCL | cuDNN `9.22.0.52-1`, local NCCL `2.30.4` |
 | PyTorch | `2.12.0+cu132` |
-| Docker build helper | `/root/vllm/blackwell-llm-docker/build-eldritch-fullstack-cu132.sh` |
+| Docker build helper | `/root/vllm/blackwell-llm-docker/build-eldritch-final-cu132.sh` |
 
 The image is a clean Docker build, not a runtime overlay.
 
@@ -80,7 +80,7 @@ This compose file supports both DCP1/SM120 and DCP/B12X. Set `ATTN_BACKEND` to
 ```yaml
 services:
   glm52:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-fullstack-v420dbb3-b12x284a2ea-cu132-20260625}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-final-v0ec1381-b12x284a2ea-cu132-20260626}
     container_name: ${NAME:-glm52-v13}
     network_mode: host
     ipc: host
@@ -211,8 +211,8 @@ docker run -d --name glm52-v13 \
   -e VLLM_USE_V2_MODEL_RUNNER=1 \
   -e B12X_W4A16_TC_DECODE=1 \
   -e B12X_MOE_FORCE_A16=1 \
-  voipmonitor/vllm:eldritch-fullstack-v420dbb3-b12x284a2ea-cu132-20260625 \
-  /bin/bash -lc 'unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS; exec vllm serve /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522 --served-model-name GLM-5.2-NVFP4 --host 0.0.0.0 --port 8000 --trust-remote-code --tensor-parallel-size 8 --decode-context-parallel-size 1 --quantization modelopt_fp4 --kv-cache-dtype fp8 --attention-backend FLASHINFER_MLA_SPARSE_SM120 --moe-backend b12x --load-format fastsafetensors -cc.pass_config.fuse_allreduce_rms=True --gpu-memory-utilization 0.955 --max-model-len 262144 --max-num-seqs 32 --max-num-batched-tokens 8192 --max-cudagraph-capture-size 128 --async-scheduling --enable-chunked-prefill --enable-prefix-caching --enable-auto-tool-choice --tool-call-parser glm47 --reasoning-parser glm45 --default-chat-template-kwargs "{\"reasoning_effort\":\"high\"}" --hf-overrides "{\"use_index_cache\":true,\"index_topk_pattern\":\"FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS\"}" --speculative-config "{\"method\":\"mtp\",\"num_speculative_tokens\":3,\"moe_backend\":\"b12x\",\"draft_sample_method\":\"probabilistic\"}"'
+  voipmonitor/vllm:eldritch-final-v0ec1381-b12x284a2ea-cu132-20260626 \
+  /bin/bash -lc 'unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS; exec vllm serve /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522 --served-model-name GLM-5.2-NVFP4 --host 0.0.0.0 --port 8000 --trust-remote-code --tensor-parallel-size 8 --decode-context-parallel-size 1 --quantization modelopt_fp4 --kv-cache-dtype fp8 --attention-backend FLASHINFER_MLA_SPARSE_SM120 --moe-backend b12x --load-format fastsafetensors -cc.pass_config.fuse_allreduce_rms=True --gpu-memory-utilization 0.955 --max-model-len 262144 --max-num-seqs 32 --max-num-batched-tokens 8192 --max-cudagraph-capture-size 128 --async-scheduling --enable-chunked-prefill --enable-prefix-caching --enable-auto-tool-choice --tool-call-parser glm47 --reasoning-parser glm45 --default-chat-template-kwargs "{\"reasoning_effort\":\"high\"}" --hf-overrides "{\"use_index_cache\":true,\"index_topk_pattern\":\"FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS\"}" --speculative-config "{\"method\":\"mtp\",\"num_speculative_tokens\":3,\"moe_backend\":\"b12x\",\"draft_sample_method\":\"probabilistic\"}"'
 ```
 
 For a no-MTP baseline, remove the final `--speculative-config ...` argument.
