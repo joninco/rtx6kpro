@@ -1,24 +1,27 @@
 # Xiaomi MiMo V2.5 Pro FP4-DFlash v2
 
 This page documents the baked Eldritch vLLM path for
-`XiaomiMiMo/MiMo-V2.5-Pro-FP4-DFlash` on RTX 6000 Pro Blackwell. The v1/v2
-overlay is no longer required; the MiMo padded-V DFlash fix is included in the
-image.
+`XiaomiMiMo/MiMo-V2.5-Pro-FP4-DFlash` on RTX 6000 Pro Blackwell. The older
+runtime overlay is no longer required; the MiMo padded-V DFlash fix is included
+in the shared Eldritch final image.
 
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-enlightenment-v9e8b0ab-b12x21e5cd4-cu132-20260624
-voipmonitor/vllm@sha256:0158205fd17403dc755dbe34f76133edbbf2caa5c5bec4580aea99af2916bf9e
+voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626
+voipmonitor/vllm@sha256:dd41066fc2bd00fbc9446a78a386a3fe3700d42a4553ddf7a5bcb304ba200f86
 ```
 
 | Component | Revision |
 |---|---|
-| vLLM | `codex/eldritch-all-experiments-tp6fix-20260624 @ 9e8b0abcfd1986415812f30cbcffe37e346e7755` |
-| MiMo fix | local PR #43 equivalent, baked into the vLLM branch |
-| B12X | `21e5cd4d420b5ad5a68491416ae452599dbe0b5f` |
-| FlashInfer | `b3baedbbef2686df91b6dc43818ee56fe26ceba2` |
-| DeepGEMM | `14073b4e1e706506e193231209738c848d092a1f` |
+| vLLM | `codex/eldritch-final-20260626 @ fcc614141e5e9ab18cb304c476f7feed2a9552e3` |
+| MiMo fix | baked into the vLLM branch; no bind-mount overlay required |
+| B12X | `284a2eae83754ee1abd31c37b9ca66b68e20b8a8` |
+| FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
+| DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` |
+
+See [`eldritch-final-docker.md`](./eldritch-final-docker.md) for the full
+Docker build recipe and component pins.
 
 ## Model
 
@@ -61,7 +64,7 @@ kernel_unified_attention_diffkv
 ```yaml
 services:
   mimo25-dflash:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v9e8b0ab-b12x21e5cd4-cu132-20260624}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626}
     container_name: ${NAME:-mimo25-dflash-v2}
     network_mode: host
     ipc: host
@@ -136,7 +139,7 @@ services:
 ## Single Docker Run
 
 ```bash
-IMAGE=voipmonitor/vllm:eldritch-enlightenment-v9e8b0ab-b12x21e5cd4-cu132-20260624
+IMAGE=voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626
 MODEL=/root/.cache/huggingface/hub/models--XiaomiMiMo--MiMo-V2.5-Pro-FP4-DFlash/snapshots/b754e6c86008bdb5cc901308dda5a38173ec7276
 CACHE=/root/.cache/vllm-mimo25-dflash-v2
 
@@ -160,17 +163,23 @@ docker run -d --name mimo25-dflash-v2 \
 
 ## Validation
 
-Measured on 8x RTX 6000 Pro Blackwell, TP8, DFlash 7, FP8 KV,
-`flashinfer_cutlass` MoE:
+Final image smoke was run on 8x RTX 6000 Pro Blackwell, TP8/DCP1, DFlash 7,
+FP8 KV, `TRITON_ATTN`, `flashinfer_cutlass` MoE, `linear_backend=b12x`.
 
 | Test | Result |
 |---|---:|
-| `/mnt/test.py -L` generation-only steady range | 240-280 tok/s |
-| Decode cc1 ctx0 | 154.8 tok/s |
-| Decode TTFT / ITL | 82 ms / 6.4 ms |
-| Prefill 8k | 7,971 tok/s |
-| Prefill 64k | 5,778 tok/s |
-| Startup KV cache | 1,248,002 tokens |
+| `/mnt/test.py` generation-only smoke | 276.3 tok/s |
+| `/mnt/test.py` finish / CJK | `stop` / `0` |
+| `/mnt/test.py` TTFT | 146 ms |
+| Startup KV cache | 1,284,428 tokens |
+| DFlash acceptance during smoke | about `0.69/0.45/0.30/0.25/0.16/0.14/0.11` early, then varies by prompt |
+
+The old `v9e8b0ab` image had a validated production run in the `240-280 tok/s`
+range for `/mnt/test.py -L`, cc1 decode around `154.8 tok/s`, and prefill
+around `7,971 tok/s` at 8k and `5,778 tok/s` at 64k. The final image smoke
+matches the short-context behavior; full production sweep should be rerun with
+`max-num-seqs=64` or higher before replacing those historical throughput
+numbers.
 
 Commands:
 
@@ -178,4 +187,10 @@ Commands:
 python3 /mnt/test.py --port 8000 -L
 python3 /root/llm-inference-bench/llm_decode_bench.py --port 8000 --concurrency 1 --contexts 0k --duration 30 --skip-prefill
 python3 /root/llm-inference-bench/llm_decode_bench.py --port 8000 --prefill-only --standalone-prefill --prefill-contexts 8k,64k --prefill-duration 10
+```
+
+Final image artifact:
+
+```text
+/root/bench-results/final-eldritch-20260626/mimo25-final-tp8-dflash7-smoke.json
 ```
