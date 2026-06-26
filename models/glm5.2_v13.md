@@ -239,41 +239,39 @@ DCP4 with B12X attention and MTP3: change
 
 ## Validation
 
-Measured on one 8-GPU group with `max_num_seqs=1` / small graph caps for fast
-smoke startup. Full production launches should use `max_num_seqs=32` and a
-larger graph cap.
+The table below is a clean `vfcc6141` coherence smoke, not the full production
+throughput sweep. It was measured with `max_num_seqs=1` and graph cap `4` so
+that every DCP/MTP combination can be restarted quickly during validation. Full
+production launches should use `max_num_seqs=32` and graph cap `128` or larger.
 
-| Mode | Attention | MTP | KV cache tokens | Decode cc1 ctx0 tok/s | Prefill 8k tok/s | Prefill 64k tok/s |
+Each row ran the same coding smoke twice: a short prompt and a padded
+`-c 30000` long-context prompt. All listed runs returned coherent output with
+`0` CJK characters.
+
+| Mode | Attention | MTP | KV cache tokens | Short ctx tok/s | 30k ctx tok/s | 30k TTFT |
 |---|---|---:|---:|---:|---:|---:|
-| TP8 DCP1 | `FLASHINFER_MLA_SPARSE_SM120` + fused RMS/all-reduce | off | 682,624 | 81.4-82.0 | 2,663 | 4,851 |
-| TP8 DCP1 | `FLASHINFER_MLA_SPARSE_SM120` + fused RMS/all-reduce | 3 | not recorded | 128.0 | not rerun | not rerun |
-| TP8 DCP4 | `B12X_MLA_SPARSE` | off | 2,704,128 | 62.3 | 1,980 | 3,188 |
-| TP8 DCP4 | `B12X_MLA_SPARSE` | 3 | 2,579,456 | 70.6 | not rerun | not rerun |
-| TP8 DCP8 | `B12X_MLA_SPARSE` | 3 | 5,143,552 | 83-88 on 30k-context smoke | not rerun | not rerun |
+| TP8 DCP1 | `FLASHINFER_MLA_SPARSE_SM120` | off | 682,624 | 83.7 | 80.0 | 9.405s |
+| TP8 DCP1 | `FLASHINFER_MLA_SPARSE_SM120` | 3 | 652,608 | 163.5 | 167.5 | 9.098s |
+| TP8 DCP2 | `B12X_MLA_SPARSE` | off | 1,352,064 | 66.3 | 65.0 | 4.776s |
+| TP8 DCP2 | `B12X_MLA_SPARSE` | 3 | 1,289,728 | 97.1 | 86.5 | 4.992s |
+| TP8 DCP4 | `B12X_MLA_SPARSE` | off | 2,704,128 | 62.3 | 62.5 | 6.063s |
+| TP8 DCP4 | `B12X_MLA_SPARSE` | 3 | 2,579,456 | 91.1 | 83.2 | 6.790s |
+| TP8 DCP8 | `B12X_MLA_SPARSE` | off | 5,392,896 | 56.4 | 56.5 | 9.418s |
+| TP8 DCP8 | `B12X_MLA_SPARSE` | 3 | 5,143,552 | 89.3 | 85.2 | 10.591s |
 
-Clean `vfcc6141` smoke status:
+Representative MTP3 acceptance logs:
 
-- TP8/DCP4/MTP-off, `max_num_seqs=1`, graph cap `4`, long-context `-c 30000`:
-  coherent Sieve output across 20+ iterations, `0` CJK characters, about
-  `62.3 tok/s` generation-only.
-- TP8/DCP8/MTP3, `max_num_seqs=1`, graph cap `4`, long-context `-c 30000`:
-  coherent Sieve output across 30+ iterations, `0` CJK characters, about
-  `83-88 tok/s` generation-only. Acceptance logs were typically around
-  `0.93/0.80/0.65`.
+| Mode | Short-context positions | 30k-context positions |
+|---|---|---|
+| DCP1 MTP3 | about `0.94 / 0.78 / 0.62` | about `0.94 / 0.79 / 0.62` |
+| DCP2 MTP3 | about `0.93 / 0.77 / 0.64` | about `0.93 / 0.81 / 0.66` |
+| DCP4 MTP3 | about `0.93 / 0.80 / 0.64` | about `0.89-0.94 / 0.79-0.82 / 0.63-0.68` |
+| DCP8 MTP3 | about `0.94 / 0.81 / 0.67` | about `0.90-0.94 / 0.75-0.81 / 0.50-0.67` |
 
-Warm DCP1 MTP3 acceptance examples were around:
-
-```text
-0.91 / 0.75 / 0.58
-0.94 / 0.81 / 0.66
-```
-
-Warm MTP3 acceptance examples for DCP4 were:
+The full decode/prefill benchmark artifacts are stored under:
 
 ```text
-0.958 / 0.796 / 0.660
-0.900 / 0.751 / 0.570
-0.895 / 0.733 / 0.599
+/root/bench-results/final-eldritch-20260626/
 ```
 
 Useful checks:
