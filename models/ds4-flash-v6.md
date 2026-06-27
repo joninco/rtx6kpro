@@ -38,8 +38,9 @@ deepseek-ai/DeepSeek-V4-Flash
 
 ## Docker Compose
 
-Set `VARIANT` to `b12x`, `lucifer-cutlass`, or `lucifer-default`. Set `MTP=1`
-to enable DS4 MTP with two speculative tokens.
+Set `VARIANT` to `b12x`, `lucifer-cutlass`, or `lucifer-default`. Set
+`MTP_TOKENS=0`, `2`, or `3`; `0` disables MTP. The legacy `MTP=1` toggle is
+still accepted and maps to `MTP_TOKENS=2`.
 
 ```yaml
 services:
@@ -75,7 +76,8 @@ services:
       MODEL_PATH: ${MODEL_PATH:-/root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash/snapshots/6976c7ff1b30a1b2cb7805021b8ba4684041f136}
       PORT: ${PORT:-8000}
       VARIANT: ${VARIANT:-b12x}
-      MTP: ${MTP:-0}
+      MTP_TOKENS: ${MTP_TOKENS:-0}
+      MTP: ${MTP:-}
       TP_SIZE: ${TP_SIZE:-2}
       MAX_NUM_SEQS: ${MAX_NUM_SEQS:-128}
       MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-}
@@ -90,6 +92,9 @@ services:
 
         EXTRA_ARGS=()
         SPEC_ARGS=()
+        if [ -n "$${MTP:-}" ] && [ "$${MTP}" = "1" ] && [ "$${MTP_TOKENS}" = "0" ]; then
+          MTP_TOKENS=2
+        fi
 
         case "$${VARIANT}" in
           b12x)
@@ -106,8 +111,8 @@ services:
             export B12X_DENSE_SPLITK_TURBO=1
             export B12X_W4A16_TC_DECODE=1
             EXTRA_ARGS=(--attention-backend B12X_MLA_SPARSE --moe-backend b12x --linear-backend b12x)
-            if [ "$${MTP}" = "1" ]; then
-              SPEC_ARGS=(--speculative-config '{"method":"mtp","num_speculative_tokens":2,"draft_sample_method":"probabilistic","moe_backend":"b12x"}')
+            if [ "$${MTP_TOKENS}" != "0" ]; then
+              SPEC_ARGS=(--speculative-config "{\"method\":\"mtp\",\"num_speculative_tokens\":$${MTP_TOKENS},\"draft_sample_method\":\"probabilistic\",\"moe_backend\":\"b12x\"}")
             fi
             ;;
           lucifer-cutlass)
@@ -115,8 +120,8 @@ services:
             export VLLM_PCIE_ALLREDUCE_BACKEND=cpp
             MAX_NUM_BATCHED_TOKENS="$${MAX_NUM_BATCHED_TOKENS:-8192}"
             EXTRA_ARGS=(--attention-backend FLASHINFER_MLA_SPARSE_DSV4 --kernel-config.moe_backend flashinfer_cutlass --disable-custom-all-reduce)
-            if [ "$${MTP}" = "1" ]; then
-              SPEC_ARGS=(--speculative-config '{"method":"mtp","num_speculative_tokens":2,"draft_sample_method":"probabilistic"}')
+            if [ "$${MTP_TOKENS}" != "0" ]; then
+              SPEC_ARGS=(--speculative-config "{\"method\":\"mtp\",\"num_speculative_tokens\":$${MTP_TOKENS},\"draft_sample_method\":\"probabilistic\"}")
             fi
             ;;
           lucifer-default)
@@ -124,8 +129,8 @@ services:
             export VLLM_PCIE_ALLREDUCE_BACKEND=cpp
             MAX_NUM_BATCHED_TOKENS="$${MAX_NUM_BATCHED_TOKENS:-8192}"
             EXTRA_ARGS=(--attention-backend FLASHINFER_MLA_SPARSE_DSV4 --disable-custom-all-reduce)
-            if [ "$${MTP}" = "1" ]; then
-              SPEC_ARGS=(--speculative-config '{"method":"mtp","num_speculative_tokens":2,"draft_sample_method":"probabilistic"}')
+            if [ "$${MTP_TOKENS}" != "0" ]; then
+              SPEC_ARGS=(--speculative-config "{\"method\":\"mtp\",\"num_speculative_tokens\":$${MTP_TOKENS},\"draft_sample_method\":\"probabilistic\"}")
             fi
             ;;
           *)
@@ -134,7 +139,7 @@ services:
             ;;
         esac
 
-        if [ "$${MTP}" = "1" ] && [ "$${GRAPH_CAP}" = "256" ]; then
+        if [ "$${MTP_TOKENS}" != "0" ] && [ "$${GRAPH_CAP}" = "256" ]; then
           GRAPH_CAP=512
         fi
 
@@ -209,24 +214,29 @@ docker run -d --name ds4-v6 \
 All rows below are TP2 on RTX PRO 6000 Blackwell, `kv-cache-dtype=fp8`,
 `max-model-len=262144`, `max-num-seqs=128`, 30 second sustained decode cells,
 and the final `vfcc6141` image. B12X used `MAX_NUM_BATCHED_TOKENS=4096`;
-Lucifer variants used `8192`.
+Lucifer variants used `8192`. The audited rerun stores one docker log per
+measured container in the artifact directory.
 
 ### Decode Throughput
 
-Aggregate decode tok/s at `ctx=0k`.
+Aggregate decode tok/s at `ctx=0k`. `MTP tokens=2` is the best setting in this
+rerun; `MTP tokens=3` is still faster than no-MTP for cc1, but loses throughput
+against `2` because acceptance drops.
 
-| Variant | MTP | cc1 | cc64 | cc128 |
-|---|---:|---:|---:|---:|
-| B12X | off | 130.8 | 1375.7 | 1887.7 |
-| B12X | on | 130.1 | 1379.4 | 1890.8 |
-| Lucifer CUTLASS | off | 123.6 | 1983.3 | 3247.8 |
-| Lucifer CUTLASS | on | 123.2 | 1961.8 | 3232.7 |
-| Lucifer default | off | 122.7 | 1809.1 | 2996.8 |
-| Lucifer default | on | 121.8 | 1814.4 | 2993.5 |
+| Variant | MTP tokens | cc1 | cc64 | cc128 | Accept avg |
+|---|---:|---:|---:|---:|---:|
+| B12X | 0 | 130.8 | 1379.1 | 1893.3 | n/a |
+| B12X | 2 | 214.6 | 1487.3 | 1592.6 | 0.55-0.73 |
+| B12X | 3 | 195.5 | 1264.4 | 1372.3 | 0.42-0.46 |
+| Lucifer CUTLASS | 0 | 123.9 | 2004.0 | 3243.7 | n/a |
+| Lucifer CUTLASS | 2 | 211.5 | 2867.1 | 4344.3 | 0.64-0.69 |
+| Lucifer CUTLASS | 3 | 203.4 | 2689.6 | 3997.3 | 0.48-0.49 |
+| Lucifer default | 0 | 122.7 | 1828.0 | 3006.1 | n/a |
+| Lucifer default | 2 | 205.2 | 2596.8 | 4007.5 | 0.67-0.74 |
+| Lucifer default | 3 | 195.4 | 2455.6 | 3685.8 | 0.49-0.52 |
 
-In this TP2 run, DS4 MTP does not materially improve throughput for these
-profiles. B12X has the best cc1 result; Lucifer CUTLASS has the best high
-concurrency decode.
+B12X remains the best no-MTP cc1 path. Lucifer CUTLASS is the best high
+concurrency decode path, especially with `MTP_TOKENS=2`.
 
 ### Prefill Throughput
 
@@ -243,7 +253,7 @@ so the table records MTP-off launches.
 
 `python3 /mnt/test.py` smoke results:
 
-| Variant | MTP | Finish | CJK | Generation tok/s |
+| Variant | MTP tokens | Finish | CJK | Generation tok/s |
 |---|---:|---|---:|---:|
 | B12X | off | `stop` | 0 | 131.9 |
 | Lucifer CUTLASS | off | `stop` | 0 | 125.0 |
@@ -252,12 +262,16 @@ so the table records MTP-off launches.
 ## Artifacts
 
 ```text
-/root/bench-results/final-eldritch-20260626/ds4-final-b12x-tp2-mtp0-decode-c1c64c128.json
-/root/bench-results/final-eldritch-20260626/ds4-final-b12x-tp2-mtp1-decode-c1c64c128.json
-/root/bench-results/final-eldritch-20260626/ds4-final-lucifer-cutlass-tp2-mtp0-decode-c1c64c128.json
-/root/bench-results/final-eldritch-20260626/ds4-final-lucifer-cutlass-tp2-mtp1-decode-c1c64c128.json
-/root/bench-results/final-eldritch-20260626/ds4-final-lucifer-default-tp2-mtp0-decode-c1c64c128.json
-/root/bench-results/final-eldritch-20260626/ds4-final-lucifer-default-tp2-mtp1-decode-c1c64c128.json
+/root/bench-results/ds4-v6-mtp-audit-20260627/ds4-v6-b12x-tp2-mtp0-decode-c1c64c128.json
+/root/bench-results/ds4-v6-mtp-audit-20260627/ds4-v6-b12x-tp2-mtp2-decode-c1c64c128.json
+/root/bench-results/ds4-v6-mtp-audit-20260627/ds4-v6-b12x-tp2-mtp3-decode-c1c64c128.json
+/root/bench-results/ds4-v6-mtp-audit-20260627/ds4-v6-lucifer-cutlass-tp2-mtp0-decode-c1c64c128.json
+/root/bench-results/ds4-v6-mtp-audit-20260627/ds4-v6-lucifer-cutlass-tp2-mtp2-decode-c1c64c128.json
+/root/bench-results/ds4-v6-mtp-audit-20260627/ds4-v6-lucifer-cutlass-tp2-mtp3-decode-c1c64c128.json
+/root/bench-results/ds4-v6-mtp-audit-20260627/ds4-v6-lucifer-default-tp2-mtp0-decode-c1c64c128.json
+/root/bench-results/ds4-v6-mtp-audit-20260627/ds4-v6-lucifer-default-tp2-mtp2-decode-c1c64c128.json
+/root/bench-results/ds4-v6-mtp-audit-20260627/ds4-v6-lucifer-default-tp2-mtp3-decode-c1c64c128.json
+/root/bench-results/ds4-v6-mtp-audit-20260627/ds4v6-*.log
 /root/bench-results/final-eldritch-20260626/ds4-final-b12x-tp2-mtp0-prefill.json
 /root/bench-results/final-eldritch-20260626/ds4-final-lucifer-cutlass-tp2-mtp0-prefill.json
 /root/bench-results/final-eldritch-20260626/ds4-final-lucifer-default-tp2-mtp0-prefill.json
