@@ -7,8 +7,8 @@ A16, FP8 KV cache, vLLM V2 model runner, and optional MTP3.
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626
-voipmonitor/vllm@sha256:dd41066fc2bd00fbc9446a78a386a3fe3700d42a4553ddf7a5bcb304ba200f86
+voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
+voipmonitor/vllm@sha256:8a1090eaf61aa7632403060ac5fda5a6ee4b34183f8d20fb04ee616edfa9d61e
 ```
 
 | Component | Revision |
@@ -91,7 +91,7 @@ This compose file supports both DCP1/SM120 and DCP/B12X. Set `ATTN_BACKEND` to
 ```yaml
 services:
   glm52:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627}
     container_name: ${NAME:-glm52-v13}
     network_mode: host
     ipc: host
@@ -220,7 +220,7 @@ docker run -d --name glm52-v13 \
   -e VLLM_USE_V2_MODEL_RUNNER=1 \
   -e B12X_W4A16_TC_DECODE=1 \
   -e B12X_MOE_FORCE_A16=1 \
-  voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626 \
+  voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627 \
   /bin/bash -lc 'unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS; exec vllm serve /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522 --served-model-name GLM-5.2-NVFP4 --host 0.0.0.0 --port 8000 --trust-remote-code --tensor-parallel-size 8 --decode-context-parallel-size 1 --quantization modelopt_fp4 --kv-cache-dtype fp8 --attention-backend FLASHINFER_MLA_SPARSE_SM120 --moe-backend b12x --load-format fastsafetensors -cc.pass_config.fuse_allreduce_rms=True --gpu-memory-utilization 0.955 --max-model-len 262144 --max-num-seqs 32 --max-num-batched-tokens 8192 --max-cudagraph-capture-size 128 --async-scheduling --enable-chunked-prefill --enable-prefix-caching --enable-auto-tool-choice --tool-call-parser glm47 --reasoning-parser glm45 --default-chat-template-kwargs "{\"reasoning_effort\":\"high\"}" --hf-overrides "{\"use_index_cache\":true,\"index_topk_pattern\":\"FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS\"}" --speculative-config "{\"method\":\"mtp\",\"num_speculative_tokens\":3,\"moe_backend\":\"b12x\",\"draft_sample_method\":\"probabilistic\"}"'
 ```
 
@@ -258,7 +258,7 @@ Example compose override for TP6/DCP6/MTP3, using the compose file shown
 above:
 
 ```bash
-IMAGE=voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626 \
+IMAGE=voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627 \
 TP_SIZE=6 \
 DCP_SIZE=6 \
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 \

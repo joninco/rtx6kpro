@@ -1,18 +1,19 @@
 # Kimi-K2.7-Code v2 on Eldritch
 
 This page documents Kimi-K2.7-Code on the shared Eldritch final image with the
-Kimi-K2.6 DFlash draft. This is the successor to `kimi-k27-code.md`.
+Kimi-K2.6 DFlash and Eagle3 draft options. This is the successor to
+`kimi-k27-code.md`.
 
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626
-voipmonitor/vllm@sha256:dd41066fc2bd00fbc9446a78a386a3fe3700d42a4553ddf7a5bcb304ba200f86
+voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
+voipmonitor/vllm@sha256:8a1090eaf61aa7632403060ac5fda5a6ee4b34183f8d20fb04ee616edfa9d61e
 ```
 
 | Component | Revision |
 |---|---|
-| vLLM | `codex/eldritch-final-20260626 @ fcc614141e5e9ab18cb304c476f7feed2a9552e3` |
+| vLLM | `codex/eldritch-kimi-dcp-dflash-graphcapture-20260627 @ bfaa36b53505ecf726fd3f370690136ca03ae9ea` |
 | B12X | `284a2eae83754ee1abd31c37b9ca66b68e20b8a8` |
 | FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
 | DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` |
@@ -34,6 +35,12 @@ DFlash draft:
 /root/.cache/huggingface/hub/models--SubSir--Kimi-K2.6-DFlash-tmp/snapshots/171a2d3e68ec4050abe66c298477056b2fc2d40a
 ```
 
+Eagle3 draft:
+
+```text
+festr2/kimi-k2.6-eagle3-mla-fp8
+```
+
 ## Runtime
 
 | Setting | Value |
@@ -44,6 +51,7 @@ DFlash draft:
 | KV cache | `fp8` |
 | Runner | V2 |
 | DFlash tokens | `7` |
+| Eagle3 tokens | `3` |
 | Tool parser | `kimi_k2` |
 | Reasoning parser | `kimi_k2` |
 | Custom allreduce | disabled for this profile |
@@ -59,12 +67,18 @@ Use `--max-cudagraph-capture-size=8` or higher. For production testing use
 `max_num_seqs=64` and graph cap `64` or higher. `max_num_seqs=1` plus graph cap
 `8` is only a fast one-client debug profile.
 
+Eagle3 note: the final image keeps the Eagle draft at its native DCP setting by
+default. Do not set `VLLM_DCP_SHARD_DRAFT=1` for Eagle3 unless explicitly
+testing that path. Earlier Eldritch images inherited the target DCP value into
+the Eagle draft and DCP4 failed during load with a target/draft KV-head
+validation error.
+
 ## Docker Compose
 
 ```yaml
 services:
   kimi:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627}
     container_name: ${NAME:-kimi-k27-code-v2}
     init: true
     network_mode: host
@@ -138,7 +152,7 @@ services:
 ## Single Docker Run
 
 ```bash
-IMAGE=voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626
+IMAGE=voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
 DRAFT=/root/.cache/huggingface/hub/models--SubSir--Kimi-K2.6-DFlash-tmp/snapshots/171a2d3e68ec4050abe66c298477056b2fc2d40a
 CACHE=/root/.cache/vllm-kimi-k27-code-v2
 
@@ -157,6 +171,18 @@ docker run -d --name kimi-k27-code-v2 \
   -e SAFETENSORS_FAST_GPU=1 \
   "$IMAGE" /bin/sh -lc 'unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS VLLM_CPP_AR_1STAGE_NCCL_CUTOFF VLLM_CPP_AR_IGNORE_CUTOFF_MAX_ROWS VLLM_USE_B12X_FP8_GEMM; exec vllm serve moonshotai/Kimi-K2.7-Code --served-model-name Kimi-K2.7-Code --host 0.0.0.0 --port 8000 --trust-remote-code --tensor-parallel-size 8 --decode-context-parallel-size 1 --kv-cache-dtype fp8 --attention-backend TRITON_MLA --gpu-memory-utilization 0.94 --max-model-len 262144 --max-num-seqs 64 --max-num-batched-tokens 8192 --max-cudagraph-capture-size 64 --mm-processor-cache-gb 0 --mm-encoder-tp-mode weights --reasoning-parser kimi_k2 --tool-call-parser kimi_k2 --enable-auto-tool-choice --async-scheduling --enable-chunked-prefill --enable-prefix-caching --load-format fastsafetensors --speculative-config "{\"model\":\"'$DRAFT'\",\"method\":\"dflash\",\"num_speculative_tokens\":7,\"attention_backend\":\"TRITON_ATTN\"}"'
 ```
+
+## Eagle3 Variant
+
+Replace only `--speculative-config`:
+
+```bash
+--speculative-config '{"model":"festr2/kimi-k2.6-eagle3-mla-fp8","method":"eagle3","num_speculative_tokens":3,"rejection_sample_method":"standard","draft_sample_method":"greedy"}'
+```
+
+For DCP4, keep the target launch identical except
+`--decode-context-parallel-size 4`. The final image does not require
+`VLLM_DCP_SHARD_DRAFT=0`; this is now the Eagle3 default.
 
 ## Validation
 
@@ -187,6 +213,18 @@ python3 /root/llm-inference-bench/llm_decode_bench.py --port 8000 --concurrency 
 python3 /root/llm-inference-bench/llm_decode_bench.py --port 8000 --prefill-only --standalone-prefill --prefill-contexts 8k,64k --prefill-duration 10
 ```
 
+Additional final-image DCP4 checks, TP8, `max_num_seqs=1`, graph cap `8`:
+
+| Mode | Context | Result |
+|---|---:|---:|
+| DFlash7 | 0k smoke | 159.3 gen tok/s, CJK 0 |
+| DFlash7 | 0k cc1 decode bench | 112.8 tok/s |
+| DFlash7 | KV cache budget | 1,604,480 tokens |
+| Eagle3 | 0k smoke | 166.8 gen tok/s, CJK 0 |
+| Eagle3 | 30k smoke | 169.4 gen tok/s, 58.3 tok/s incl. TTFT, CJK 0 |
+| Eagle3 | 0k cc1 decode bench | 115.3 tok/s |
+| Eagle3 | KV cache budget | 1,682,944 tokens |
+
 Final image artifacts:
 
 ```text
@@ -194,4 +232,9 @@ Final image artifacts:
 /root/bench-results/final-eldritch-20260626/kimi27-final-dcp1-none-30k.json
 /root/bench-results/final-eldritch-20260626/kimi27-final-dcp1-dflash7-short.json
 /root/bench-results/final-eldritch-20260626/kimi27-final-dcp1-dflash7-30k.json
+/root/bench-results/kimi27-final-bfaa36b-20260627/final-dcp4-dflash7-short-single.json
+/root/bench-results/kimi27-final-bfaa36b-20260627/final-dcp4-dflash7-decodebench-cc1.json
+/root/bench-results/kimi27-final-bfaa36b-20260627/final-dcp4-eagle3-short-single.json
+/root/bench-results/kimi27-final-bfaa36b-20260627/final-dcp4-eagle3-30k-single.json
+/root/bench-results/kimi27-final-bfaa36b-20260627/final-dcp4-eagle3-decodebench-cc1.json
 ```

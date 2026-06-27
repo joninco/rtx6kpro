@@ -8,8 +8,8 @@ in the shared Eldritch final image.
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626
-voipmonitor/vllm@sha256:dd41066fc2bd00fbc9446a78a386a3fe3700d42a4553ddf7a5bcb304ba200f86
+voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
+voipmonitor/vllm@sha256:8a1090eaf61aa7632403060ac5fda5a6ee4b34183f8d20fb04ee616edfa9d61e
 ```
 
 | Component | Revision |
@@ -64,7 +64,7 @@ kernel_unified_attention_diffkv
 ```yaml
 services:
   mimo25-dflash:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627}
     container_name: ${NAME:-mimo25-dflash-v2}
     network_mode: host
     ipc: host
@@ -139,7 +139,7 @@ services:
 ## Single Docker Run
 
 ```bash
-IMAGE=voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626
+IMAGE=voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
 MODEL=/root/.cache/huggingface/hub/models--XiaomiMiMo--MiMo-V2.5-Pro-FP4-DFlash/snapshots/b754e6c86008bdb5cc901308dda5a38173ec7276
 CACHE=/root/.cache/vllm-mimo25-dflash-v2
 

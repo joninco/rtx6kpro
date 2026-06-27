@@ -6,8 +6,8 @@ DS4 Flash v6, Kimi 2.7, and MiMo validation work.
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626
-voipmonitor/vllm@sha256:dd41066fc2bd00fbc9446a78a386a3fe3700d42a4553ddf7a5bcb304ba200f86
+voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
+voipmonitor/vllm@sha256:8a1090eaf61aa7632403060ac5fda5a6ee4b34183f8d20fb04ee616edfa9d61e
 ```
 
 The image is a clean Docker build. It does not require runtime bind-mount
@@ -19,6 +19,13 @@ overlays for vLLM or B12X sources.
 git clone https://github.com/local-inference-lab/blackwell-llm-docker.git
 cd blackwell-llm-docker
 git checkout 85f3e12
+IMAGE=voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627 \
+BUILD_BASE_IMAGE=0 \
+VLLM_REF=codex/eldritch-kimi-dcp-dflash-graphcapture-20260627 \
+VLLM_COMMIT=bfaa36b53505ecf726fd3f370690136ca03ae9ea \
+LAUNCHER_REF=codex/eldritch-kimi-dcp-dflash-graphcapture-20260627 \
+LAUNCHER_COMMIT=bfaa36b53505ecf726fd3f370690136ca03ae9ea \
+VLLM_BUILD_VERSION=0.11.2.dev279+eldritch.final.bfaa36b.b12x284a2ea.fi25dd814.cu132.20260627 \
 ./build-eldritch-final-cu132.sh
 ```
 
@@ -36,8 +43,8 @@ with an empty `NCCL_GRAPH_FILE=` environment entry.
 | Component | Revision |
 |---|---|
 | vLLM repo | `https://github.com/local-inference-lab/vllm.git` |
-| vLLM branch | `codex/eldritch-final-20260626` |
-| vLLM commit | `fcc614141e5e9ab18cb304c476f7feed2a9552e3` |
+| vLLM branch | `codex/eldritch-kimi-dcp-dflash-graphcapture-20260627` |
+| vLLM commit | `bfaa36b53505ecf726fd3f370690136ca03ae9ea` |
 | B12X repo | `https://github.com/voipmonitor/b12x.git` |
 | B12X branch | `codex/eldritch-fullstack-20260625` |
 | B12X commit | `284a2eae83754ee1abd31c37b9ca66b68e20b8a8` |
@@ -60,6 +67,10 @@ small follow-up fixes:
 | `5d35206` | Pass K/V strides and scales to Triton MLA, needed for Kimi-style page layouts. |
 | `0ec1381` | Keep DFlash target `lm_head` sharing, needed by MiMo/Kimi DFlash runs. |
 | `fcc6141` | Make speculative warmup prompts DCP shard-safe; fixes DCP4 no-MTP and DCP8 MTP3 graph warmup. |
+| `dc5bb1` | Include DCP communicator in CUDA graph capture context; fixes Kimi DCP4+DFlash illegal memory access under graph capture. |
+| `9c9d23e` | Make DFlash DCP KV metadata prefix-safe. |
+| `a81d072` | Preserve DFlash prefix cache under DCP by aligning effective target/draft prefix boundaries. |
+| `bfaa36b` | Keep Eagle3 draft DCP opt-in so Kimi DCP4+Eagle3 does not inherit an invalid target DCP layout. |
 
 The underlying fullstack branch includes the DS4 Flash SM120/CUTLASS runtime
 fixes, GLM DCP global top-k and sharded draft KV, structural tool-call fixes,
@@ -74,7 +85,7 @@ Inside the final image:
 torch 2.12.0+cu132
 flashinfer 0.6.13+cu132
 deep_gemm 2.5.0
-vllm 0.11.2.dev279+eldritch.final.fcc6141.b12x284a2ea.fi25dd814.cu132.20260626
+vllm 0.11.2.dev279+eldritch.final.bfaa36b.b12x284a2ea.fi25dd814.cu132.20260627
 b12x 0.23.0
 Rust tool parser present
 ```
@@ -92,4 +103,5 @@ Validated GLM-5.2 clean-image smokes:
 |---|---|
 | TP8/DCP4/MTP-off | Coherent 30k-context Sieve output, `0` CJK, about `62.3 tok/s`. |
 | TP8/DCP8/MTP3 | Coherent 30k-context Sieve output, `0` CJK, about `83-88 tok/s`, acceptance around `0.93/0.80/0.65`. |
-
+| Kimi TP8/DCP4/DFlash7 | Coherent short-context Sieve output, `0` CJK, `112.8 tok/s` cc1 decode. |
+| Kimi TP8/DCP4/Eagle3 | Coherent short and 30k-context Sieve output, `0` CJK, `115.3 tok/s` cc1 decode. |
