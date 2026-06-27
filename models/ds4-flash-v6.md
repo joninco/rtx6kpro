@@ -1,13 +1,13 @@
-# DeepSeek-V4-Flash v6 Eldritch Final
+# DeepSeek-V4-Flash v6 Eldritch Enlightenment
 
-This page documents DeepSeek-V4-Flash on the shared Eldritch final Docker
+This page documents DeepSeek-V4-Flash on the shared Eldritch Enlightenment Docker
 image. The same image is used for GLM-5.2 v13, Kimi 2.7, and MiMo validation.
 
 ## Docker Image
 
 ```text
-voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
-voipmonitor/vllm@sha256:8a1090eaf61aa7632403060ac5fda5a6ee4b34183f8d20fb04ee616edfa9d61e
+voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627
+voipmonitor/vllm@sha256:cdc9ee372d97754d624d46e195fafe13cfbd405c9be72a0b455f54f278278777
 ```
 
 Build recipe:
@@ -18,7 +18,7 @@ build-eldritch-final-cu132.sh
 blackwell-llm-docker commit 85f3e12
 ```
 
-See [`eldritch-final-docker.md`](./eldritch-final-docker.md) for the exact
+See [`eldritch-enlightenment-docker.md`](./eldritch-enlightenment-docker.md) for the exact
 component pins.
 
 ## Model
@@ -45,7 +45,7 @@ still accepted and maps to `MTP_TOKENS=2`.
 ```yaml
 services:
   ds4:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627}
     container_name: ${NAME:-ds4-v6}
     network_mode: host
     ipc: host
@@ -205,7 +205,7 @@ docker run -d --name ds4-v6 \
   -e B12X_MHC_MAX_TOKENS=16384 \
   -e B12X_DENSE_SPLITK_TURBO=1 \
   -e B12X_W4A16_TC_DECODE=1 \
-  voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627 \
+  voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627 \
   /bin/bash -lc 'unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS; exec vllm serve /root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash/snapshots/6976c7ff1b30a1b2cb7805021b8ba4684041f136 --served-model-name DeepSeek-V4-Flash --host 0.0.0.0 --port 8000 --trust-remote-code --kv-cache-dtype fp8 --block-size 256 --load-format auto --tensor-parallel-size 2 --gpu-memory-utilization 0.90 --max-model-len 262144 --max-num-seqs 128 --max-num-batched-tokens 4096 --max-cudagraph-capture-size 256 --compilation-config "{\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"custom_ops\":[\"all\"]}" --async-scheduling --no-scheduler-reserve-full-isl --enable-chunked-prefill --enable-prefix-caching --enable-flashinfer-autotune --tokenizer-mode deepseek_v4 --tool-call-parser deepseek_v4 --reasoning-parser deepseek_v4 --enable-auto-tool-choice --default-chat-template-kwargs.thinking=true --default-chat-template-kwargs.reasoning_effort=high --attention-backend B12X_MLA_SPARSE --moe-backend b12x --linear-backend b12x'
 ```
 

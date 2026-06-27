@@ -3,24 +3,24 @@
 This page documents the baked Eldritch vLLM path for
 `XiaomiMiMo/MiMo-V2.5-Pro-FP4-DFlash` on RTX 6000 Pro Blackwell. The older
 runtime overlay is no longer required; the MiMo padded-V DFlash fix is included
-in the shared Eldritch final image.
+in the shared Eldritch Enlightenment image.
 
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
-voipmonitor/vllm@sha256:8a1090eaf61aa7632403060ac5fda5a6ee4b34183f8d20fb04ee616edfa9d61e
+voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627
+voipmonitor/vllm@sha256:cdc9ee372d97754d624d46e195fafe13cfbd405c9be72a0b455f54f278278777
 ```
 
 | Component | Revision |
 |---|---|
-| vLLM | `codex/eldritch-final-20260626 @ fcc614141e5e9ab18cb304c476f7feed2a9552e3` |
+| vLLM | `codex/eldritch-enlightenment-release-20260627 @ 67e95e77da1a45f5d28cedd8958e50284939e03e` |
 | MiMo fix | baked into the vLLM branch; no bind-mount overlay required |
 | B12X | `284a2eae83754ee1abd31c37b9ca66b68e20b8a8` |
 | FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
 | DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` |
 
-See [`eldritch-final-docker.md`](./eldritch-final-docker.md) for the full
+See [`eldritch-enlightenment-docker.md`](./eldritch-enlightenment-docker.md) for the full
 Docker build recipe and component pins.
 
 ## Model
@@ -64,7 +64,7 @@ kernel_unified_attention_diffkv
 ```yaml
 services:
   mimo25-dflash:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627}
     container_name: ${NAME:-mimo25-dflash-v2}
     network_mode: host
     ipc: host
@@ -139,7 +139,7 @@ services:
 ## Single Docker Run
 
 ```bash
-IMAGE=voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
+IMAGE=voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627
 MODEL=/root/.cache/huggingface/hub/models--XiaomiMiMo--MiMo-V2.5-Pro-FP4-DFlash/snapshots/b754e6c86008bdb5cc901308dda5a38173ec7276
 CACHE=/root/.cache/vllm-mimo25-dflash-v2
 

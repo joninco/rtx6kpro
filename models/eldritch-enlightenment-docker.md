@@ -1,4 +1,4 @@
-# Eldritch Final vLLM Docker
+# Eldritch Enlightenment vLLM Docker
 
 This page documents the reproducible Docker build used by the GLM-5.2 v13,
 DS4 Flash v6, Kimi 2.7, and MiMo validation work.
@@ -6,8 +6,8 @@ DS4 Flash v6, Kimi 2.7, and MiMo validation work.
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
-voipmonitor/vllm@sha256:8a1090eaf61aa7632403060ac5fda5a6ee4b34183f8d20fb04ee616edfa9d61e
+voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627
+voipmonitor/vllm@sha256:cdc9ee372d97754d624d46e195fafe13cfbd405c9be72a0b455f54f278278777
 ```
 
 The image is a clean Docker build. It does not require runtime bind-mount
@@ -19,13 +19,13 @@ overlays for vLLM or B12X sources.
 git clone https://github.com/local-inference-lab/blackwell-llm-docker.git
 cd blackwell-llm-docker
 git checkout 85f3e12
-IMAGE=voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627 \
-BUILD_BASE_IMAGE=0 \
-VLLM_REF=codex/eldritch-kimi-dcp-dflash-graphcapture-20260627 \
-VLLM_COMMIT=bfaa36b53505ecf726fd3f370690136ca03ae9ea \
-LAUNCHER_REF=codex/eldritch-kimi-dcp-dflash-graphcapture-20260627 \
-LAUNCHER_COMMIT=bfaa36b53505ecf726fd3f370690136ca03ae9ea \
-VLLM_BUILD_VERSION=0.11.2.dev279+eldritch.final.bfaa36b.b12x284a2ea.fi25dd814.cu132.20260627 \
+IMAGE=voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627 \
+BUILD_BASE_IMAGE=1 \
+VLLM_REF=codex/eldritch-enlightenment-release-20260627 \
+VLLM_COMMIT=67e95e77da1a45f5d28cedd8958e50284939e03e \
+LAUNCHER_REF=codex/eldritch-enlightenment-release-20260627 \
+LAUNCHER_COMMIT=67e95e77da1a45f5d28cedd8958e50284939e03e \
+VLLM_BUILD_VERSION=0.11.2.dev279+eldritch.enlightenment.67e95e7.b12x284a2ea.fi25dd814.cu132.20260627 \
 ./build-eldritch-final-cu132.sh
 ```
 
@@ -43,8 +43,8 @@ with an empty `NCCL_GRAPH_FILE=` environment entry.
 | Component | Revision |
 |---|---|
 | vLLM repo | `https://github.com/local-inference-lab/vllm.git` |
-| vLLM branch | `codex/eldritch-kimi-dcp-dflash-graphcapture-20260627` |
-| vLLM commit | `bfaa36b53505ecf726fd3f370690136ca03ae9ea` |
+| vLLM branch | `codex/eldritch-enlightenment-release-20260627` |
+| vLLM commit | `67e95e77da1a45f5d28cedd8958e50284939e03e` |
 | B12X repo | `https://github.com/voipmonitor/b12x.git` |
 | B12X branch | `codex/eldritch-fullstack-20260625` |
 | B12X commit | `284a2eae83754ee1abd31c37b9ca66b68e20b8a8` |
@@ -58,8 +58,8 @@ with an empty `NCCL_GRAPH_FILE=` environment entry.
 
 ## vLLM Patch Stack
 
-The final branch is based on `codex/eldritch-fullstack-20260625` and adds four
-small follow-up fixes:
+The release branch is based on `codex/eldritch-fullstack-20260625` and adds the
+validated follow-up fixes:
 
 | Commit | Purpose |
 |---|---|
@@ -71,6 +71,8 @@ small follow-up fixes:
 | `9c9d23e` | Make DFlash DCP KV metadata prefix-safe. |
 | `a81d072` | Preserve DFlash prefix cache under DCP by aligning effective target/draft prefix boundaries. |
 | `bfaa36b` | Keep Eagle3 draft DCP opt-in so Kimi DCP4+Eagle3 does not inherit an invalid target DCP layout. |
+| `905d6a5` | Shard native MTP draft under DCP by default; fixes GLM/DS native MTP `topk_scores_buffer` startup failures without requiring env overrides. |
+| `67e95e7` | Integrate the GLM sparse-indexer fused prefill kernel cherry-picked from upstream vLLM PR #46862. |
 
 The underlying fullstack branch includes the DS4 Flash SM120/CUTLASS runtime
 fixes, GLM DCP global top-k and sharded draft KV, structural tool-call fixes,
@@ -85,7 +87,7 @@ Inside the final image:
 torch 2.12.0+cu132
 flashinfer 0.6.13+cu132
 deep_gemm 2.5.0
-vllm 0.11.2.dev279+eldritch.final.bfaa36b.b12x284a2ea.fi25dd814.cu132.20260627
+vllm 0.11.2.dev279+eldritch.enlightenment.67e95e7.b12x284a2ea.fi25dd814.cu132.20260627
 b12x 0.23.0
 Rust tool parser present
 ```

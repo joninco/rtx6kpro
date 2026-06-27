@@ -7,18 +7,18 @@ Kimi-K2.6 DFlash and Eagle3 draft options. This is the successor to
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
-voipmonitor/vllm@sha256:8a1090eaf61aa7632403060ac5fda5a6ee4b34183f8d20fb04ee616edfa9d61e
+voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627
+voipmonitor/vllm@sha256:cdc9ee372d97754d624d46e195fafe13cfbd405c9be72a0b455f54f278278777
 ```
 
 | Component | Revision |
 |---|---|
-| vLLM | `codex/eldritch-kimi-dcp-dflash-graphcapture-20260627 @ bfaa36b53505ecf726fd3f370690136ca03ae9ea` |
+| vLLM | `codex/eldritch-enlightenment-release-20260627 @ 67e95e77da1a45f5d28cedd8958e50284939e03e` |
 | B12X | `284a2eae83754ee1abd31c37b9ca66b68e20b8a8` |
 | FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
 | DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` |
 
-See [`eldritch-final-docker.md`](./eldritch-final-docker.md) for the full
+See [`eldritch-enlightenment-docker.md`](./eldritch-enlightenment-docker.md) for the full
 Docker build recipe and component pins.
 
 ## Models
@@ -78,7 +78,7 @@ validation error.
 ```yaml
 services:
   kimi:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627}
     container_name: ${NAME:-kimi-k27-code-v2}
     init: true
     network_mode: host
@@ -152,7 +152,7 @@ services:
 ## Single Docker Run
 
 ```bash
-IMAGE=voipmonitor/vllm:eldritch-final-vbfaa36b-b12x284a2ea-kimi-specdcp-cu132-20260627
+IMAGE=voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627
 DRAFT=/root/.cache/huggingface/hub/models--SubSir--Kimi-K2.6-DFlash-tmp/snapshots/171a2d3e68ec4050abe66c298477056b2fc2d40a
 CACHE=/root/.cache/vllm-kimi-k27-code-v2
 
