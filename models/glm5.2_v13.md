@@ -64,19 +64,23 @@ use B12X attention, B12X sparse indexer, global top-k, and sharded draft KV.
 | Setting | Value |
 |---|---|
 | TP | `8` |
-| DCP | `1`, `2`, `4`, or `8` |
+| DCP | TP8: `1`, `2`, `4`, or `8`; TP6: `1`, `2`, `3`, or `6` |
 | MoE backend | `b12x` |
 | Quantization | `modelopt_fp4` |
 | KV cache | `fp8` |
 | A16 | `B12X_MOE_FORCE_A16=1` |
 | Decode kernel | `B12X_W4A16_TC_DECODE=1` |
-| DCP top-k | `VLLM_DCP_GLOBAL_TOPK=1` |
-| DCP draft KV | `VLLM_DCP_SHARD_DRAFT=1` |
+| DCP top-k | enabled by default in this branch |
+| DCP draft KV | sharded by default in this branch |
 | MTP default | `3`, probabilistic draft sampling |
 | Max batched tokens | `8192` |
 
 Do not set `NCCL_GRAPH_FILE` to an empty string. If no XML topology file is
 used, unset it before starting vLLM.
+
+`VLLM_DCP_GLOBAL_TOPK` and `VLLM_DCP_SHARD_DRAFT` are legacy debug overrides in
+this image; both default to the production-safe enabled mode. They do not need
+to be set for normal launches.
 
 ## Docker Compose
 
@@ -130,8 +134,6 @@ services:
       B12X_DENSE_SPLITK_TURBO: "1"
       B12X_W4A16_TC_DECODE: "1"
       B12X_MOE_FORCE_A16: "1"
-      VLLM_DCP_GLOBAL_TOPK: "1"
-      VLLM_DCP_SHARD_DRAFT: "1"
       VLLM_CACHE_DIR: /cache/jit/vllm
       TRITON_CACHE_DIR: /cache/jit/triton
       TORCH_EXTENSIONS_DIR: /cache/jit/torch_extensions
@@ -229,12 +231,46 @@ be materially higher.
 
 DCP4 with B12X attention and MTP3: change
 `--decode-context-parallel-size 4`, `--attention-backend B12X_MLA_SPARSE`, add
-`VLLM_USE_B12X_SPARSE_INDEXER=1`, `VLLM_DCP_GLOBAL_TOPK=1`,
-`VLLM_DCP_SHARD_DRAFT=1`, `VLLM_ENABLE_PCIE_ALLREDUCE=1`,
+`VLLM_USE_B12X_SPARSE_INDEXER=1`, `VLLM_ENABLE_PCIE_ALLREDUCE=1`,
 `VLLM_PCIE_ALLREDUCE_BACKEND=b12x`, and add:
 
 ```bash
 --speculative-config '{"method":"mtp","num_speculative_tokens":3,"moe_backend":"b12x","draft_sample_method":"probabilistic"}'
+```
+
+## TP6 Notes
+
+TP6 is supported, but it is not the same runtime profile as TP8:
+
+- Use `B12X_MLA_SPARSE` attention for TP6.
+- Use DCP values that divide TP6: `1`, `2`, `3`, or `6`.
+- The runtime will print virtual-TP padding `attention heads 64 -> 96`. This is
+  expected for TP6 because `64 % 6 != 0`; the padding keeps B12X head-block
+  alignment safe.
+- On this host, B12X PCIe oneshot allreduce with world size 6 did not complete
+  startup. The validated TP6 recipe disables it with
+  `VLLM_ENABLE_PCIE_ALLREDUCE=0`, so TP6 falls back to PyNCCL allreduce.
+- The TP6 validation below used `MAX_MODEL_LEN=128000`,
+  `GPU_MEMORY_UTILIZATION=0.957`, `MAX_NUM_BATCHED_TOKENS=2048`,
+  `MAX_NUM_SEQS=1`, graph cap `4` without MTP and `16` with MTP3.
+
+Example compose override for TP6/DCP6/MTP3, using the compose file shown
+above:
+
+```bash
+IMAGE=voipmonitor/vllm:eldritch-final-vfcc6141-b12x284a2ea-cu132-20260626 \
+TP_SIZE=6 \
+DCP_SIZE=6 \
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 \
+ATTN_BACKEND=B12X_MLA_SPARSE \
+VLLM_ENABLE_PCIE_ALLREDUCE=0 \
+GPU_MEMORY_UTILIZATION=0.957 \
+MAX_MODEL_LEN=128000 \
+MAX_NUM_BATCHED_TOKENS=2048 \
+MAX_NUM_SEQS=1 \
+MAX_CUDAGRAPH_CAPTURE_SIZE=16 \
+MTP_TOKENS=3 \
+docker compose -f ./compose.yaml up -d
 ```
 
 ## Validation
@@ -259,6 +295,19 @@ Each row ran the same coding smoke twice: a short prompt and a padded
 | TP8 DCP8 | `B12X_MLA_SPARSE` | off | 5,392,896 | 56.4 | 56.5 | 9.418s |
 | TP8 DCP8 | `B12X_MLA_SPARSE` | 3 | 5,143,552 | 89.3 | 85.2 | 10.591s |
 
+TP6 validation used B12X attention and `VLLM_ENABLE_PCIE_ALLREDUCE=0`.
+
+| Mode | Attention | MTP | KV cache tokens | Short ctx tok/s | 30k ctx tok/s | 30k TTFT |
+|---|---|---:|---:|---:|---:|---:|
+| TP6 DCP1 | `B12X_MLA_SPARSE` | off | 156,672 | 57.8 | 56.1 | 9.109s |
+| TP6 DCP1 | `B12X_MLA_SPARSE` | 3 | 130,112 | 115.4 | 92.3 | 4.436s |
+| TP6 DCP2 | `B12X_MLA_SPARSE` | off | 320,256 | 46.6 | 46.7 | 6.317s |
+| TP6 DCP2 | `B12X_MLA_SPARSE` | 3 | 258,944 | 79.4 | 69.4 | 6.519s |
+| TP6 DCP3 | `B12X_MLA_SPARSE` | off | 480,143 | 44.7 | 44.9 | 7.916s |
+| TP6 DCP3 | `B12X_MLA_SPARSE` | 3 | 388,221 | 79.4 | 68.5 | 7.952s |
+| TP6 DCP6 | `B12X_MLA_SPARSE` | off | 951,952 | 40.1 | 40.5 | 11.721s |
+| TP6 DCP6 | `B12X_MLA_SPARSE` | 3 | 768,383 | 78.7 | 75.3 | 12.063s |
+
 Representative MTP3 acceptance logs:
 
 | Mode | Short-context positions | 30k-context positions |
@@ -267,6 +316,10 @@ Representative MTP3 acceptance logs:
 | DCP2 MTP3 | about `0.93 / 0.77 / 0.64` | about `0.93 / 0.81 / 0.66` |
 | DCP4 MTP3 | about `0.93 / 0.80 / 0.64` | about `0.89-0.94 / 0.79-0.82 / 0.63-0.68` |
 | DCP8 MTP3 | about `0.94 / 0.81 / 0.67` | about `0.90-0.94 / 0.75-0.81 / 0.50-0.67` |
+| TP6 DCP1 MTP3 | about `0.89 / 0.73 / 0.59` | about `0.95 / 0.84 / 0.72` |
+| TP6 DCP2 MTP3 | about `0.95 / 0.83 / 0.65` | about `0.95 / 0.83 / 0.65` |
+| TP6 DCP3 MTP3 | about `0.94 / 0.81 / 0.69` | about `0.95 / 0.82 / 0.70` |
+| TP6 DCP6 MTP3 | about `0.91 / 0.73 / 0.55` | about `0.93 / 0.80 / 0.68` |
 
 The full decode/prefill benchmark artifacts are stored under:
 
