@@ -6,8 +6,8 @@ DS4 Flash v6, Kimi 2.7, and MiMo validation work.
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627
-voipmonitor/vllm@sha256:cdc9ee372d97754d624d46e195fafe13cfbd405c9be72a0b455f54f278278777
+voipmonitor/vllm:eldritch-enlightenment-v56fb5d8-b12x284a2ea-cu132-20260628
+voipmonitor/vllm@sha256:51695977116cfa83567dc66c9f7bf875a438a2b87609ee7159decf0463775269
 ```
 
 The image is a clean Docker build. It does not require runtime bind-mount
@@ -18,21 +18,21 @@ overlays for vLLM or B12X sources.
 ```bash
 git clone https://github.com/local-inference-lab/blackwell-llm-docker.git
 cd blackwell-llm-docker
-git checkout 85f3e12
-IMAGE=voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627 \
+git checkout 5fa115b
+IMAGE=voipmonitor/vllm:eldritch-enlightenment-v56fb5d8-b12x284a2ea-cu132-20260628 \
 BUILD_BASE_IMAGE=1 \
-VLLM_REF=codex/eldritch-enlightenment-release-20260627 \
-VLLM_COMMIT=67e95e77da1a45f5d28cedd8958e50284939e03e \
-LAUNCHER_REF=codex/eldritch-enlightenment-release-20260627 \
-LAUNCHER_COMMIT=67e95e77da1a45f5d28cedd8958e50284939e03e \
-VLLM_BUILD_VERSION=0.11.2.dev279+eldritch.enlightenment.67e95e7.b12x284a2ea.fi25dd814.cu132.20260627 \
-./build-eldritch-final-cu132.sh
+VLLM_REF=codex/eldritch-sm120-dcp-clean-pr-20260628 \
+VLLM_COMMIT=56fb5d890be75a53aee91446df1fe619e1ed90c1 \
+LAUNCHER_REF=codex/eldritch-sm120-dcp-clean-pr-20260628 \
+LAUNCHER_COMMIT=56fb5d890be75a53aee91446df1fe619e1ed90c1 \
+VLLM_BUILD_VERSION=0.11.2.dev279+eldritch.enlightenment.56fb5d8.b12x284a2ea.fi25dd814.cu132.20260628 \
+./build-eldritch-enlightenment-sm120dcp-cu132.sh
 ```
 
 The build helper is:
 
 ```text
-build-eldritch-final-cu132.sh
+build-eldritch-enlightenment-sm120dcp-cu132.sh
 ```
 
 It rebuilds the system/build base images instead of inheriting the older base
@@ -43,8 +43,8 @@ with an empty `NCCL_GRAPH_FILE=` environment entry.
 | Component | Revision |
 |---|---|
 | vLLM repo | `https://github.com/local-inference-lab/vllm.git` |
-| vLLM branch | `codex/eldritch-enlightenment-release-20260627` |
-| vLLM commit | `67e95e77da1a45f5d28cedd8958e50284939e03e` |
+| vLLM branch | `codex/eldritch-sm120-dcp-clean-pr-20260628` |
+| vLLM commit | `56fb5d890be75a53aee91446df1fe619e1ed90c1` |
 | B12X repo | `https://github.com/voipmonitor/b12x.git` |
 | B12X branch | `codex/eldritch-fullstack-20260625` |
 | B12X commit | `284a2eae83754ee1abd31c37b9ca66b68e20b8a8` |
@@ -73,6 +73,7 @@ validated follow-up fixes:
 | `bfaa36b` | Keep Eagle3 draft DCP opt-in so Kimi DCP4+Eagle3 does not inherit an invalid target DCP layout. |
 | `905d6a5` | Shard native MTP draft under DCP by default; fixes GLM/DS native MTP `topk_scores_buffer` startup failures without requiring env overrides. |
 | `67e95e7` | Integrate the GLM sparse-indexer fused prefill kernel cherry-picked from upstream vLLM PR #46862. |
+| `56fb5d8` | Add DCP decode/LSE support to `FLASHINFER_MLA_SPARSE_SM120` and fix mixed prefill/decode warmup for DCP. |
 
 The underlying fullstack branch includes the DS4 Flash SM120/CUTLASS runtime
 fixes, GLM DCP global top-k and sharded draft KV, structural tool-call fixes,
@@ -81,13 +82,13 @@ performance/bugfix PRs.
 
 ## Verification
 
-Inside the final image:
+Inside the image:
 
 ```text
 torch 2.12.0+cu132
 flashinfer 0.6.13+cu132
 deep_gemm 2.5.0
-vllm 0.11.2.dev279+eldritch.enlightenment.67e95e7.b12x284a2ea.fi25dd814.cu132.20260627
+vllm 0.11.2.dev279+eldritch.enlightenment.56fb5d8.b12x284a2ea.fi25dd814.cu132.20260628
 b12x 0.23.0
 Rust tool parser present
 ```
@@ -104,6 +105,9 @@ Validated GLM-5.2 clean-image smokes:
 | Mode | Result |
 |---|---|
 | TP8/DCP4/MTP-off | Coherent 30k-context Sieve output, `0` CJK, about `62.3 tok/s`. |
+| TP8/DCP2/MTP-off/SM120 | Coherent 30k-context Sieve output, `0` CJK, about `65.7 tok/s`. |
+| TP8/DCP4/MTP-off/SM120 | Coherent 30k-context Sieve output, `0` CJK, about `64.5 tok/s`. |
+| TP8/DCP8/MTP-off/SM120 | Coherent 30k-context Sieve output, `0` CJK, about `61.0 tok/s`. |
 | TP8/DCP8/MTP3 | Coherent 30k-context Sieve output, `0` CJK, about `83-88 tok/s`, acceptance around `0.93/0.80/0.65`. |
 | Kimi TP8/DCP4/DFlash7 | Coherent short-context Sieve output, `0` CJK, `112.8 tok/s` cc1 decode. |
 | Kimi TP8/DCP4/Eagle3 | Coherent short and 30k-context Sieve output, `0` CJK, `115.3 tok/s` cc1 decode. |
