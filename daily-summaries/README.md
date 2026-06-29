@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-28](2026-06/2026-06-28.md) | DeepSeek releases DSpark / DeepSpec: New speculative decoding paper + code claiming **57–78% faste |
 | [2026-06-27](2026-06/2026-06-27.md) | New Docker image released: `eldritch-final-v1e8d565-b12x284a2ea-cu132-20260626` with all regressions |
 | [2026-06-26](2026-06/2026-06-26.md) | DS4-Flash v5 recipe is broken — regressions across all kernels, was accidentally published before  |
 | [2026-06-25](2026-06/2026-06-25.md) | DS4F v5 accidentally pushed — has a known crash bug in the b12x path; lucifer path unaffected. Do  |
@@ -129,6 +130,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-28](2026-06/2026-06-28.md) | DeepSeek releases DSpark / DeepSpec: New speculative decoding paper + code claiming **57–78% faste |
 | [2026-06-27](2026-06/2026-06-27.md) | New Docker image released: `eldritch-final-v1e8d565-b12x284a2ea-cu132-20260626` with all regressions |
 | [2026-06-26](2026-06/2026-06-26.md) | DS4-Flash v5 recipe is broken — regressions across all kernels, was accidentally published before  |
 | [2026-06-25](2026-06/2026-06-25.md) | DS4F v5 accidentally pushed — has a known crash bug in the b12x path; lucifer path unaffected. Do  |
