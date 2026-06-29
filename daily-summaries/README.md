@@ -10,6 +10,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-27](2026-06/2026-06-27.md) | New Docker image released: `eldritch-final-v1e8d565-b12x284a2ea-cu132-20260626` with all regressions |
 | [2026-06-26](2026-06/2026-06-26.md) | DS4-Flash v5 recipe is broken — regressions across all kernels, was accidentally published before  |
 | [2026-06-25](2026-06/2026-06-25.md) | DS4F v5 accidentally pushed — has a known crash bug in the b12x path; lucifer path unaffected. Do  |
 | [2026-06-24](2026-06/2026-06-24.md) | GLM-5.2 REAP 504B Aider Polyglot final score: 89.8% pass_rate_2 after rerunning context-exhausted ca |
@@ -128,6 +129,7 @@ Each highlight links directly to the relevant Discord message.
 
 | Date | Highlights |
 |------|------------|
+| [2026-06-27](2026-06/2026-06-27.md) | New Docker image released: `eldritch-final-v1e8d565-b12x284a2ea-cu132-20260626` with all regressions |
 | [2026-06-26](2026-06/2026-06-26.md) | DS4-Flash v5 recipe is broken — regressions across all kernels, was accidentally published before  |
 | [2026-06-25](2026-06/2026-06-25.md) | DS4F v5 accidentally pushed — has a known crash bug in the b12x path; lucifer path unaffected. Do  |
 | [2026-06-24](2026-06/2026-06-24.md) | GLM-5.2 REAP 504B Aider Polyglot final score: 89.8% pass_rate_2 after rerunning context-exhausted ca |
