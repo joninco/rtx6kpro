@@ -20,7 +20,7 @@ voipmonitor/vllm@sha256:534ad1a3f7e5877ee131b0ad886f6d372fd40b787a2bd2f3e98a4057
 | B12X commit | `8ce61f9b8dbbb54e8d9cf46740d56f533cb2e7e7` |
 | FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
 | DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` |
-| CUDA / cuBLAS | CUDA `13.2.1`, cuBLAS `13.4.1.2-1` |
+| CUDA / cuBLAS | CUDA `13.2.1`; `libcublas13-cuda-13=13.4.1.2-1`; the base image also carries legacy `libcublas-13-2=13.4.0.1-1` |
 | cuDNN / NCCL | cuDNN `9.22.0.52-1`, local NCCL `2.30.4` |
 | PyTorch | `2.12.0+cu132` |
 | Docker build helper | `/root/vllm/blackwell-llm-docker/build-eldritch-enlightenment-head66-cu132.sh` |

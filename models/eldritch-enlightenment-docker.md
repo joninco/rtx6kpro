@@ -48,7 +48,7 @@ a runtime source overlay or `VLLM_PATCH_URL`.
 | FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
 | DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` |
 | CUTLASS | `d80a4e53b52b42550659a8696dab32705265e324` |
-| CUDA / cuBLAS | CUDA `13.2.1`, cuBLAS `13.4.1.2-1` |
+| CUDA / cuBLAS | CUDA `13.2.1`; `libcublas13-cuda-13=13.4.1.2-1`; the base image also carries legacy `libcublas-13-2=13.4.0.1-1` |
 | cuDNN / NCCL | cuDNN `9.22.0.52-1`, local NCCL `2.30.4` |
 | PyTorch | `2.12.0+cu132` |
 | FlashInfer cubin wheel | disabled in this build (`FLASHINFER_BUILD_CUBIN=0`) |
