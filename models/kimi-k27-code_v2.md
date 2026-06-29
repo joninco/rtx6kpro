@@ -7,14 +7,14 @@ Kimi-K2.6 DFlash and Eagle3 draft options. This is the successor to
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627
-voipmonitor/vllm@sha256:cdc9ee372d97754d624d46e195fafe13cfbd405c9be72a0b455f54f278278777
+voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629
+voipmonitor/vllm@sha256:534ad1a3f7e5877ee131b0ad886f6d372fd40b787a2bd2f3e98a40573d51ddcf
 ```
 
 | Component | Revision |
 |---|---|
-| vLLM | `codex/eldritch-enlightenment-release-20260627 @ 67e95e77da1a45f5d28cedd8958e50284939e03e` |
-| B12X | `284a2eae83754ee1abd31c37b9ca66b68e20b8a8` |
+| vLLM | `codex/eldritch-head66-b12xmla-20260629 @ 8722ac7f8427919ed67bfe9c5e47b3cc30dfbf2e` |
+| B12X | `8ce61f9b8dbbb54e8d9cf46740d56f533cb2e7e7` |
 | FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
 | DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` |
 
@@ -78,7 +78,7 @@ validation error.
 ```yaml
 services:
   kimi:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629}
     container_name: ${NAME:-kimi-k27-code-v2}
     init: true
     network_mode: host
@@ -152,7 +152,7 @@ services:
 ## Single Docker Run
 
 ```bash
-IMAGE=voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627
+IMAGE=voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629
 DRAFT=/root/.cache/huggingface/hub/models--SubSir--Kimi-K2.6-DFlash-tmp/snapshots/171a2d3e68ec4050abe66c298477056b2fc2d40a
 CACHE=/root/.cache/vllm-kimi-k27-code-v2
 
@@ -194,6 +194,11 @@ rounded to a multiple of 8. Use graph cap `8` or higher.
 Measured on 8x RTX 6000 Pro Blackwell, TP8/DCP1, final image. These are
 one-client smoke measurements with `max_num_seqs=1` and graph cap `8`; rerun a
 full sweep with `max_num_seqs=64` before treating them as production throughput.
+
+Current `8722ac7/b12x8ce61f9` clean-image DFlash7 smoke used target
+`TRITON_MLA`, draft `TRITON_ATTN`, V2 runner, KV cache `369,429`, and graph
+cap `8`. `/mnt/test.py -L` returned coherent output with `0` CJK and roughly
+`200-310 tok/s` generation-only in the debug profile.
 
 | Test | Result |
 |---|---:|

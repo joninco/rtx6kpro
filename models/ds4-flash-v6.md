@@ -6,16 +6,16 @@ image. The same image is used for GLM-5.2 v13, Kimi 2.7, and MiMo validation.
 ## Docker Image
 
 ```text
-voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627
-voipmonitor/vllm@sha256:cdc9ee372d97754d624d46e195fafe13cfbd405c9be72a0b455f54f278278777
+voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629
+voipmonitor/vllm@sha256:534ad1a3f7e5877ee131b0ad886f6d372fd40b787a2bd2f3e98a40573d51ddcf
 ```
 
 Build recipe:
 
 ```text
 https://github.com/local-inference-lab/blackwell-llm-docker
-build-eldritch-final-cu132.sh
-blackwell-llm-docker commit 85f3e12
+build-eldritch-enlightenment-head66-cu132.sh
+blackwell-llm-docker commit 0f6bf1c
 ```
 
 See [`eldritch-enlightenment-docker.md`](./eldritch-enlightenment-docker.md) for the exact
@@ -45,7 +45,7 @@ still accepted and maps to `MTP_TOKENS=2`.
 ```yaml
 services:
   ds4:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629}
     container_name: ${NAME:-ds4-v6}
     network_mode: host
     ipc: host
@@ -205,11 +205,19 @@ docker run -d --name ds4-v6 \
   -e B12X_MHC_MAX_TOKENS=16384 \
   -e B12X_DENSE_SPLITK_TURBO=1 \
   -e B12X_W4A16_TC_DECODE=1 \
-  voipmonitor/vllm:eldritch-enlightenment-v67e95e7-b12x284a2ea-cu132-20260627 \
+  voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629 \
   /bin/bash -lc 'unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS; exec vllm serve /root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash/snapshots/6976c7ff1b30a1b2cb7805021b8ba4684041f136 --served-model-name DeepSeek-V4-Flash --host 0.0.0.0 --port 8000 --trust-remote-code --kv-cache-dtype fp8 --block-size 256 --load-format auto --tensor-parallel-size 2 --gpu-memory-utilization 0.90 --max-model-len 262144 --max-num-seqs 128 --max-num-batched-tokens 4096 --max-cudagraph-capture-size 256 --compilation-config "{\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"custom_ops\":[\"all\"]}" --async-scheduling --no-scheduler-reserve-full-isl --enable-chunked-prefill --enable-prefix-caching --enable-flashinfer-autotune --tokenizer-mode deepseek_v4 --tool-call-parser deepseek_v4 --reasoning-parser deepseek_v4 --enable-auto-tool-choice --default-chat-template-kwargs.thinking=true --default-chat-template-kwargs.reasoning_effort=high --attention-backend B12X_MLA_SPARSE --moe-backend b12x --linear-backend b12x'
 ```
 
 ## Benchmarks
+
+Current `8722ac7/b12x8ce61f9` clean-image smoke, TP2 B12X without MTP,
+`max_num_seqs=1`, graph cap `4`, `max_num_batched_tokens=4096`: startup used
+V2 runner, B12X PCIe oneshot allreduce, B12X Mxfp4 MoE, and reported KV cache
+`992,634`. `/mnt/test.py -L` returned coherent output with `0` CJK and about
+`132-133 tok/s` generation-only. The obsolete
+`--b12x-virtual-tp-moe-intermediate-alignment` option is not used by this
+image.
 
 All rows below are TP2 on RTX PRO 6000 Blackwell, `kv-cache-dtype=fp8`,
 `max-model-len=262144`, `max-num-seqs=128`, 30 second sustained decode cells,

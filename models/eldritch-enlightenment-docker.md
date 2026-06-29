@@ -6,8 +6,8 @@ DS4 Flash v6, Kimi 2.7, and MiMo validation work.
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-enlightenment-v56fb5d8-b12x284a2ea-cu132-20260628
-voipmonitor/vllm@sha256:51695977116cfa83567dc66c9f7bf875a438a2b87609ee7159decf0463775269
+voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629
+voipmonitor/vllm@sha256:534ad1a3f7e5877ee131b0ad886f6d372fd40b787a2bd2f3e98a40573d51ddcf
 ```
 
 The image is a clean Docker build. It does not require runtime bind-mount
@@ -18,36 +18,33 @@ overlays for vLLM or B12X sources.
 ```bash
 git clone https://github.com/local-inference-lab/blackwell-llm-docker.git
 cd blackwell-llm-docker
-git checkout 5fa115b
-IMAGE=voipmonitor/vllm:eldritch-enlightenment-v56fb5d8-b12x284a2ea-cu132-20260628 \
-BUILD_BASE_IMAGE=1 \
-VLLM_REF=codex/eldritch-sm120-dcp-clean-pr-20260628 \
-VLLM_COMMIT=56fb5d890be75a53aee91446df1fe619e1ed90c1 \
-LAUNCHER_REF=codex/eldritch-sm120-dcp-clean-pr-20260628 \
-LAUNCHER_COMMIT=56fb5d890be75a53aee91446df1fe619e1ed90c1 \
-VLLM_BUILD_VERSION=0.11.2.dev279+eldritch.enlightenment.56fb5d8.b12x284a2ea.fi25dd814.cu132.20260628 \
-./build-eldritch-enlightenment-sm120dcp-cu132.sh
+git checkout 0f6bf1c
+IMAGE=voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629 \
+BUILD_BASE_IMAGE=0 \
+./build-eldritch-enlightenment-head66-cu132.sh
 ```
 
 The build helper is:
 
 ```text
-build-eldritch-enlightenment-sm120dcp-cu132.sh
+build-eldritch-enlightenment-head66-cu132.sh
 ```
 
-It rebuilds the system/build base images instead of inheriting the older base
-with an empty `NCCL_GRAPH_FILE=` environment entry.
+It is a clean source build from pinned vLLM, B12X, FlashInfer, and DeepGEMM
+commits. It inherits the current CUDA 13.2 system/build bases and does not use
+a runtime source overlay or `VLLM_PATCH_URL`.
 
 ## Component Pins
 
 | Component | Revision |
 |---|---|
 | vLLM repo | `https://github.com/local-inference-lab/vllm.git` |
-| vLLM branch | `codex/eldritch-sm120-dcp-clean-pr-20260628` |
-| vLLM commit | `56fb5d890be75a53aee91446df1fe619e1ed90c1` |
-| B12X repo | `https://github.com/voipmonitor/b12x.git` |
-| B12X branch | `codex/eldritch-fullstack-20260625` |
-| B12X commit | `284a2eae83754ee1abd31c37b9ca66b68e20b8a8` |
+| vLLM branch | `codex/eldritch-head66-b12xmla-20260629` |
+| vLLM commit | `8722ac7f8427919ed67bfe9c5e47b3cc30dfbf2e` |
+| B12X repo | `https://github.com/lukealonso/b12x.git` |
+| B12X branch | `master` |
+| B12X commit | `8ce61f9b8dbbb54e8d9cf46740d56f533cb2e7e7` |
+| B12X merged PRs needed here | `#14`, `#16`, `#17` are in this `master` commit |
 | FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
 | DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` |
 | CUTLASS | `d80a4e53b52b42550659a8696dab32705265e324` |
@@ -58,8 +55,9 @@ with an empty `NCCL_GRAPH_FILE=` environment entry.
 
 ## vLLM Patch Stack
 
-The release branch is based on `codex/eldritch-fullstack-20260625` and adds the
-validated follow-up fixes:
+The release branch is based on `dev/eldritch-enlightenment` and includes the
+validated follow-up fixes below. The final row is PR #64, the only extra vLLM
+patch added for the 2026-06-29 head66 image:
 
 | Commit | Purpose |
 |---|---|
@@ -74,6 +72,7 @@ validated follow-up fixes:
 | `905d6a5` | Shard native MTP draft under DCP by default; fixes GLM/DS native MTP `topk_scores_buffer` startup failures without requiring env overrides. |
 | `67e95e7` | Integrate the GLM sparse-indexer fused prefill kernel cherry-picked from upstream vLLM PR #46862. |
 | `56fb5d8` | Add DCP decode/LSE support to `FLASHINFER_MLA_SPARSE_SM120` and fix mixed prefill/decode warmup for DCP. |
+| `8722ac7` | Restore minimal GLM/DSA virtual attention-head padding and pad/slice B12X sparse MLA heads locally for TP6 head66. |
 
 The underlying fullstack branch includes the DS4 Flash SM120/CUTLASS runtime
 fixes, GLM DCP global top-k and sharded draft KV, structural tool-call fixes,
@@ -88,7 +87,7 @@ Inside the image:
 torch 2.12.0+cu132
 flashinfer 0.6.13+cu132
 deep_gemm 2.5.0
-vllm 0.11.2.dev279+eldritch.enlightenment.56fb5d8.b12x284a2ea.fi25dd814.cu132.20260628
+vllm 0.11.2.dev279+eldritch.enlightenment.8722ac7.b12x8ce61f9.fi25dd814.cu132.20260629
 b12x 0.23.0
 Rust tool parser present
 ```
@@ -100,14 +99,11 @@ The runtime image config must not contain an empty `NCCL_GRAPH_FILE` or
 unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS
 ```
 
-Validated GLM-5.2 clean-image smokes:
+Validated clean-image smokes:
 
 | Mode | Result |
 |---|---|
-| TP8/DCP4/MTP-off | Coherent 30k-context Sieve output, `0` CJK, about `62.3 tok/s`. |
-| TP8/DCP2/MTP-off/SM120 | Coherent 30k-context Sieve output, `0` CJK, about `65.7 tok/s`. |
-| TP8/DCP4/MTP-off/SM120 | Coherent 30k-context Sieve output, `0` CJK, about `64.5 tok/s`. |
-| TP8/DCP8/MTP-off/SM120 | Coherent 30k-context Sieve output, `0` CJK, about `61.0 tok/s`. |
-| TP8/DCP8/MTP3 | Coherent 30k-context Sieve output, `0` CJK, about `83-88 tok/s`, acceptance around `0.93/0.80/0.65`. |
-| Kimi TP8/DCP4/DFlash7 | Coherent short-context Sieve output, `0` CJK, `112.8 tok/s` cc1 decode. |
-| Kimi TP8/DCP4/Eagle3 | Coherent short and 30k-context Sieve output, `0` CJK, `115.3 tok/s` cc1 decode. |
+| GLM-5.2 NVFP4 TP6/DCP6/MTP3 | B12X attention, A16 MoE, correct 78-char top-k pattern, KV cache `1,068,888`, coherent short and 30k Sieve output, `0` CJK, about `79-84 tok/s` short and `75-79 tok/s` at 30k. |
+| DeepSeek-V4-Flash TP2/B12X/MTP-off | B12X attention/MoE/linear, KV cache `992,634`, coherent short Sieve output, `0` CJK, about `132-133 tok/s`. |
+| Kimi-K2.7-Code TP8/DCP1/DFlash7 | Target `TRITON_MLA`, draft `TRITON_ATTN`, KV cache `369,429`, coherent short Sieve output, `0` CJK, about `200-310 tok/s` generation-only in debug smoke. |
+| MiMo V2.5 Pro FP4-DFlash TP8/DCP1/DFlash7 | `TRITON_ATTN`, `FLASHINFER_CUTLASS_MXFP4_MXFP8` MoE, KV cache `1,363,603`, coherent short Sieve output, `0` CJK, about `250-290 tok/s` generation-only in debug smoke. |
