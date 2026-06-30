@@ -18,6 +18,9 @@ block size of `5` draft tokens.
   RoPE FP32 fix: DS4 MTP2 no longer fails with `cos_sin_cache must be float32`.
 - The v8 page includes a full TP2/TP4 sweep for B12X, Lucifer default, and
   Lucifer CUTLASS across standard no-MTP, standard MTP2, and DSpark.
+- Lucifer default and Lucifer CUTLASS now enable B12X PCIe one-shot all-reduce
+  by default for decode-sized tensors, with PyNCCL fallback for larger prefill
+  all-reduces.
 - Helper launch scripts are checked into this repo so the compose/runtime layer
   does not need to duplicate the full vLLM command by hand.
 - TileLang, TVM, TorchInductor, Torch extensions, FlashInfer, and vLLM caches
@@ -92,8 +95,20 @@ dspark_markov_rank=256
 | Backend | Attention | MoE / linear |
 |---|---|---|
 | `b12x` | `B12X_MLA_SPARSE` | `--moe-backend=b12x --linear-backend=b12x`, B12X PCIe all-reduce on, `B12X_MOE_FORCE_A16=1` |
-| `lucifer-default` | `FLASHINFER_MLA_SPARSE_DSV4` | default DS4 MoE path, custom all-reduce disabled |
-| `lucifer-cutlass` | `FLASHINFER_MLA_SPARSE_DSV4` | `--kernel-config.moe_backend=flashinfer_cutlass`, custom all-reduce disabled |
+| `lucifer-default` | `FLASHINFER_MLA_SPARSE_DSV4` | default DS4 MoE path, B12X PCIe one-shot all-reduce for small decode tensors |
+| `lucifer-cutlass` | `FLASHINFER_MLA_SPARSE_DSV4` | `--kernel-config.moe_backend=flashinfer_cutlass`, B12X PCIe one-shot all-reduce for small decode tensors |
+
+For Lucifer modes, the helper sets:
+
+```text
+VLLM_ENABLE_PCIE_ALLREDUCE=1
+VLLM_PCIE_ALLREDUCE_BACKEND=b12x
+VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE=64KB
+```
+
+This selects `['B12X_PCIE_ONESHOT', 'PYNCCL']` for the TP group. Large prefill
+all-reduces are intentionally rejected by the 64 KiB one-shot limit and fall
+back to PyNCCL.
 
 ## Launch Helper
 
@@ -189,6 +204,13 @@ For the two B12X MTP2 8k prefill cells, the first full-sweep run included a
 cold artefact. Those two cells were rerun warm with the same server cache and
 are marked below.
 
+The Lucifer rows below were retested after enabling B12X PCIe one-shot
+all-reduce by default:
+
+```text
+/root/bench-results/ds4-v8-v2226f26-b12xar-lucifer-20260630/
+```
+
 ## Decode Throughput
 
 Sustained decode is aggregate tok/s from `llm_decode_bench.py`, `ctx=0`, 30
@@ -200,21 +222,21 @@ Sieve-of-Eratosthenes cc1 runs; every row had `0` CJK runs.
 | 2 | b12x | standard-mtp0 | 130.6 | 732.4 | 1020.1 | 1371.4 | 131.5 | 0 |
 | 2 | b12x | standard-mtp2 | 218.1 | 886.6 | 1168.7 | 1483.3 | 229.4 | 0 |
 | 2 | b12x | dspark | 204.9 | 708.9 | 890.1 | 963.7 | 279.6 | 0 |
-| 2 | lucifer-default | standard-mtp0 | 116.1 | 779.1 | 1153.8 | 1765.4 | 116.9 | 0 |
-| 2 | lucifer-default | standard-mtp2 | 193.8 | 1064.2 | 1679.5 | 2585.2 | 210.1 | 0 |
-| 2 | lucifer-default | dspark | 184.7 | 996.1 | 1513.5 | 2232.3 | 261.7 | 0 |
-| 2 | lucifer-cutlass | standard-mtp0 | 115.8 | 842.5 | 1254.4 | 1949.2 | 117.1 | 0 |
-| 2 | lucifer-cutlass | standard-mtp2 | 202.8 | 1167.1 | 1821.1 | 2822.8 | 213.8 | 0 |
-| 2 | lucifer-cutlass | dspark | 207.7 | 1126.1 | 1710.0 | 2466.3 | 275.1 | 0 |
+| 2 | lucifer-default | standard-mtp0 | 118.8 | 771.3 | 1158.8 | 1767.4 | 119.7 | 0 |
+| 2 | lucifer-default | standard-mtp2 | 195.0 | 1051.4 | 1692.8 | 2580.8 | 211.0 | 0 |
+| 2 | lucifer-default | dspark | 191.5 | 1027.7 | 1550.4 | 2263.9 | 268.3 | 0 |
+| 2 | lucifer-cutlass | standard-mtp0 | 128.0 | 864.4 | 1299.4 | 1977.8 | 129.2 | 0 |
+| 2 | lucifer-cutlass | standard-mtp2 | 216.1 | 1215.2 | 1857.4 | 2837.2 | 228.0 | 0 |
+| 2 | lucifer-cutlass | dspark | 222.6 | 1129.2 | 1712.9 | 2458.6 | 307.1 | 0 |
 | 4 | b12x | standard-mtp0 | 157.7 | 1073.8 | 1563.2 | 2129.4 | 159.4 | 0 |
 | 4 | b12x | standard-mtp2 | 279.0 | 1399.2 | 1826.9 | 2332.2 | 305.9 | 0 |
 | 4 | b12x | dspark | 267.8 | 1091.8 | 1354.2 | 1357.0 | 363.7 | 0 |
-| 4 | lucifer-default | standard-mtp0 | 138.7 | 1110.0 | 1690.9 | 2586.8 | 139.8 | 0 |
-| 4 | lucifer-default | standard-mtp2 | 246.3 | 1572.9 | 2476.2 | 3795.3 | 269.9 | 0 |
-| 4 | lucifer-default | dspark | 257.4 | 1480.2 | 2210.6 | 3092.1 | 339.0 | 0 |
-| 4 | lucifer-cutlass | standard-mtp0 | 132.2 | 1167.8 | 1827.7 | 2818.0 | 133.2 | 0 |
-| 4 | lucifer-cutlass | standard-mtp2 | 247.9 | 1729.5 | 2739.6 | 4079.3 | 267.4 | 0 |
-| 4 | lucifer-cutlass | dspark | 262.5 | 1624.9 | 2390.1 | 3268.9 | 368.1 | 0 |
+| 4 | lucifer-default | standard-mtp0 | 146.8 | 1110.5 | 1684.9 | 2573.1 | 147.7 | 0 |
+| 4 | lucifer-default | standard-mtp2 | 267.8 | 1574.4 | 2468.5 | 3802.1 | 276.7 | 0 |
+| 4 | lucifer-default | dspark | 254.6 | 1474.8 | 2179.3 | 3044.3 | 328.7 | 0 |
+| 4 | lucifer-cutlass | standard-mtp0 | 152.9 | 1217.1 | 1899.4 | 2905.9 | 154.2 | 0 |
+| 4 | lucifer-cutlass | standard-mtp2 | 280.0 | 1805.8 | 2800.2 | 4140.0 | 298.6 | 0 |
+| 4 | lucifer-cutlass | dspark | 287.9 | 1693.9 | 2461.3 | 3342.0 | 370.2 | 0 |
 
 ## Prefill Throughput
 
@@ -226,33 +248,34 @@ non-repeating prompts.
 | 2 | b12x | standard-mtp0 | 7763 | 5526 | 4121 |  |
 | 2 | b12x | standard-mtp2 | 7629 | 5483 | 4096 | warm rerun |
 | 2 | b12x | dspark | 7745 | 5609 | 4191 |  |
-| 2 | lucifer-default | standard-mtp0 | 13300 | 12563 | 11639 |  |
-| 2 | lucifer-default | standard-mtp2 | 12943 | 12426 | 11371 |  |
-| 2 | lucifer-default | dspark | 12291 | 12304 | 11114 |  |
-| 2 | lucifer-cutlass | standard-mtp0 | 12978 | 12348 | 11350 |  |
-| 2 | lucifer-cutlass | standard-mtp2 | 12907 | 12318 | 11349 |  |
-| 2 | lucifer-cutlass | dspark | 12441 | 12240 | 11301 |  |
+| 2 | lucifer-default | standard-mtp0 | 13363 | 12760 | 11688 | B12X one-shot AR retest |
+| 2 | lucifer-default | standard-mtp2 | 13136 | 12583 | 11534 | B12X one-shot AR retest |
+| 2 | lucifer-default | dspark | 12573 | 12563 | 11551 | B12X one-shot AR retest |
+| 2 | lucifer-cutlass | standard-mtp0 | 13021 | 12483 | 11468 | B12X one-shot AR retest |
+| 2 | lucifer-cutlass | standard-mtp2 | 12723 | 12148 | 11143 | B12X one-shot AR retest |
+| 2 | lucifer-cutlass | dspark | 12295 | 12092 | 11141 | B12X one-shot AR retest |
 | 4 | b12x | standard-mtp0 | 9564 | 6393 | 4604 |  |
 | 4 | b12x | standard-mtp2 | 9446 | 6356 | 4592 | warm rerun |
 | 4 | b12x | dspark | 9295 | 6264 | 4497 |  |
-| 4 | lucifer-default | standard-mtp0 | 15465 | 14777 | 13466 |  |
-| 4 | lucifer-default | standard-mtp2 | 14967 | 14379 | 13174 |  |
-| 4 | lucifer-default | dspark | 14921 | 14631 | 13295 |  |
-| 4 | lucifer-cutlass | standard-mtp0 | 15110 | 14404 | 13148 |  |
-| 4 | lucifer-cutlass | standard-mtp2 | 14784 | 14140 | 12958 |  |
-| 4 | lucifer-cutlass | dspark | 14795 | 14373 | 13178 |  |
+| 4 | lucifer-default | standard-mtp0 | 15483 | 14795 | 13509 | B12X one-shot AR retest |
+| 4 | lucifer-default | standard-mtp2 | 15138 | 14515 | 13259 | B12X one-shot AR retest |
+| 4 | lucifer-default | dspark | 14572 | 14412 | 13228 | B12X one-shot AR retest |
+| 4 | lucifer-cutlass | standard-mtp0 | 15179 | 14587 | 13324 | B12X one-shot AR retest |
+| 4 | lucifer-cutlass | standard-mtp2 | 14909 | 14243 | 13021 | B12X one-shot AR retest |
+| 4 | lucifer-cutlass | dspark | 14860 | 14477 | 13258 | B12X one-shot AR retest |
 
 ## Quick Read
 
 - For raw cc1 decode without speculation, B12X is fastest in this matrix:
-  TP2 `130.6 tok/s`, TP4 `157.7 tok/s`.
+  TP2 `130.6 tok/s`, TP4 `157.7 tok/s`. Lucifer CUTLASS with B12X one-shot
+  all-reduce is now close: TP2 `128.0 tok/s`, TP4 `152.9 tok/s`.
 - For high-concurrency standard MTP2, Lucifer CUTLASS is strongest:
-  TP2 cc64 `2822.8 tok/s`, TP4 cc64 `4079.3 tok/s`.
+  TP2 cc64 `2837.2 tok/s`, TP4 cc64 `4140.0 tok/s`.
 - DSpark improves cc1 heavily, especially TP4: B12X `363.7 tok/s` coding peak
-  and Lucifer CUTLASS `368.1 tok/s` coding peak.
+  and Lucifer CUTLASS `370.2 tok/s` coding peak.
 - B12X prefill is still materially slower than the Lucifer SM120 path. TP4
-  standard no-MTP 128k prefill is `4604 tok/s` on B12X versus `13466 tok/s` on
-  Lucifer default and `13148 tok/s` on Lucifer CUTLASS.
+  standard no-MTP 128k prefill is `4604 tok/s` on B12X versus `13509 tok/s` on
+  Lucifer default and `13324 tok/s` on Lucifer CUTLASS.
 - Lucifer default has the best prefill in this run; CUTLASS generally wins more
   at high-concurrency decode with MTP2.
 
@@ -261,6 +284,7 @@ non-repeating prompts.
 ```text
 /root/bench-results/ds4-v8-v2226f26-20260630/
 /root/bench-results/ds4-v8-v2226f26-20260630-rerun-b12x-mtp2-8k/
+/root/bench-results/ds4-v8-v2226f26-b12xar-lucifer-20260630/
 /root/rtx6kpro/scripts/run-ds4-v8-server.sh
 /root/rtx6kpro/scripts/run-ds4-v8-sweep.sh
 ```

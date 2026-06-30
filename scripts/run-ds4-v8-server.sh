@@ -90,12 +90,20 @@ case "$BACKEND" in
     )
     ;;
   lucifer-cutlass)
-    BACKEND_ARGS=(--attention-backend FLASHINFER_MLA_SPARSE_DSV4 --kernel-config.moe_backend flashinfer_cutlass --disable-custom-all-reduce)
-    BACKEND_ENV=(-e VLLM_ENABLE_PCIE_ALLREDUCE=0 -e VLLM_PCIE_ALLREDUCE_BACKEND=cpp)
+    BACKEND_ARGS=(--attention-backend FLASHINFER_MLA_SPARSE_DSV4 --kernel-config.moe_backend flashinfer_cutlass)
+    BACKEND_ENV=(
+      -e VLLM_ENABLE_PCIE_ALLREDUCE=1
+      -e VLLM_PCIE_ALLREDUCE_BACKEND=b12x
+      -e VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE=64KB
+    )
     ;;
   lucifer-default)
-    BACKEND_ARGS=(--attention-backend FLASHINFER_MLA_SPARSE_DSV4 --disable-custom-all-reduce)
-    BACKEND_ENV=(-e VLLM_ENABLE_PCIE_ALLREDUCE=0 -e VLLM_PCIE_ALLREDUCE_BACKEND=cpp)
+    BACKEND_ARGS=(--attention-backend FLASHINFER_MLA_SPARSE_DSV4)
+    BACKEND_ENV=(
+      -e VLLM_ENABLE_PCIE_ALLREDUCE=1
+      -e VLLM_PCIE_ALLREDUCE_BACKEND=b12x
+      -e VLLM_PCIE_ONESHOT_ALLREDUCE_MAX_SIZE=64KB
+    )
     ;;
   *)
     echo "Unknown BACKEND=$BACKEND" >&2
