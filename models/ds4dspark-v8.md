@@ -1,0 +1,279 @@
+# DeepSeek-V4-Flash and DSpark v8
+
+This page documents the DS4 v8 validation on the shared Eldritch Enlightenment
+image. Unlike v7, the benchmark matrix covers both checkpoints:
+
+```text
+deepseek-ai/DeepSeek-V4-Flash
+deepseek-ai/DeepSeek-V4-Flash-DSpark
+```
+
+The standard checkpoint is tested with MTP off and MTP2. The DSpark checkpoint
+is tested with `method=dspark`; DSpark is not regular MTP and uses its native
+block size of `5` draft tokens.
+
+## What Changed From v7
+
+- The Docker image is now the unified Eldritch build with the DeepSeek V4 MTP
+  RoPE FP32 fix: DS4 MTP2 no longer fails with `cos_sin_cache must be float32`.
+- The v8 page includes a full TP2/TP4 sweep for B12X, Lucifer default, and
+  Lucifer CUTLASS across standard no-MTP, standard MTP2, and DSpark.
+- Helper launch scripts are checked into this repo so the compose/runtime layer
+  does not need to duplicate the full vLLM command by hand.
+- TileLang, TVM, TorchInductor, Torch extensions, FlashInfer, and vLLM caches
+  are all mounted under `/cache` so repeated starts do not lose kernel caches.
+
+## Docker Image
+
+```text
+voipmonitor/vllm:eldritch-enlightenment-v2226f26-b12x15cd38c-cu132-20260629
+voipmonitor/vllm@sha256:72c2dd96310b6e9cea5c6e33982586d64a4ca7a9b66921867879309ee1aa58f6
+```
+
+Runtime version:
+
+```text
+0.11.2.dev279+eldritch.enlightenment.2226f26.b12x15cd38c.fi25dd814.cu132.20260629
+```
+
+Component pins from image labels:
+
+| Component | Commit / branch |
+|---|---|
+| vLLM | `2226f261e9a6befef7a344997fb3b6769baa3bf7` |
+| B12X | `15cd38ce3f10ee5cb7db1179cbc7c88fd15e37b7` |
+| FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
+| DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` (`nv_dev`) |
+| CUDA / PyTorch | CUDA `13.2.1`, PyTorch `2.12.0+cu132` |
+
+Important vLLM PRs included in this build:
+
+| PR | Purpose |
+|---|---|
+| local-inference-lab/vllm#64 | GLM TP6/head66 and B12X sparse-MLA compatibility stack used by the Eldritch line. |
+| local-inference-lab/vllm#66 | DSpark TP4 native TileLang sparse-attention path. |
+| local-inference-lab/vllm#67 | Keep DeepSeek V4 RoPE cache in FP32 so DS4 MTP2 starts cleanly. |
+
+See [`eldritch-enlightenment-docker.md`](./eldritch-enlightenment-docker.md) for
+the broader image build notes.
+
+## Models
+
+Standard DS4 checkpoint:
+
+```text
+/root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash/snapshots/6976c7ff1b30a1b2cb7805021b8ba4684041f136
+```
+
+DSpark checkpoint:
+
+```text
+/root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash-DSpark/snapshots/913f0657a874f76844e2e91cbe706dbcaceeb6d7
+```
+
+DSpark checkpoint settings:
+
+```text
+dspark_block_size=5
+dspark_target_layer_ids=[40,41,42]
+n_mtp_layers=3
+dspark_noise_token_id=128799
+dspark_markov_rank=256
+```
+
+## Runtime Matrix
+
+| Mode | Checkpoint | Speculative config | Graph cap used in v8 sweep |
+|---|---|---|---:|
+| `standard-mtp0` | `DeepSeek-V4-Flash` | none | 256 |
+| `standard-mtp2` | `DeepSeek-V4-Flash` | `{"method":"mtp","num_speculative_tokens":2,"draft_sample_method":"probabilistic"}` | 512 |
+| `dspark` | `DeepSeek-V4-Flash-DSpark` | `{"method":"dspark","num_speculative_tokens":5,"draft_sample_method":"probabilistic"}` | 512 |
+
+| Backend | Attention | MoE / linear |
+|---|---|---|
+| `b12x` | `B12X_MLA_SPARSE` | `--moe-backend=b12x --linear-backend=b12x`, B12X PCIe all-reduce on, `B12X_MOE_FORCE_A16=1` |
+| `lucifer-default` | `FLASHINFER_MLA_SPARSE_DSV4` | default DS4 MoE path, custom all-reduce disabled |
+| `lucifer-cutlass` | `FLASHINFER_MLA_SPARSE_DSV4` | `--kernel-config.moe_backend=flashinfer_cutlass`, custom all-reduce disabled |
+
+## Launch Helper
+
+The recommended v8 launch path is the host-side helper script:
+
+```bash
+cd /root/rtx6kpro
+
+IMAGE=voipmonitor/vllm:eldritch-enlightenment-v2226f26-b12x15cd38c-cu132-20260629 \
+NAME=ds4-v8 \
+PORT=8000 \
+GPUS=0,1 \
+TP=2 \
+BACKEND=b12x \
+MODE=standard-mtp0 \
+MAX_NUM_SEQS=64 \
+scripts/run-ds4-v8-server.sh
+```
+
+Common overrides:
+
+```bash
+# Standard DS4 + MTP2 on TP4, Lucifer CUTLASS.
+TP=4 GPUS=0,1,2,3 BACKEND=lucifer-cutlass MODE=standard-mtp2 scripts/run-ds4-v8-server.sh
+
+# DSpark checkpoint on TP2, Lucifer default.
+TP=2 GPUS=0,1 BACKEND=lucifer-default MODE=dspark scripts/run-ds4-v8-server.sh
+
+# B12X DSpark on TP4.
+TP=4 GPUS=0,1,2,3 BACKEND=b12x MODE=dspark scripts/run-ds4-v8-server.sh
+```
+
+The helper always unsets `NCCL_GRAPH_FILE`, `NCCL_GRAPH_DUMP_FILE`, and
+`VLLM_B12X_MLA_EXTEND_MAX_CHUNKS` before `vllm serve`. Do not run with
+`NCCL_GRAPH_FILE=` set to an empty string.
+
+## Docker Compose Wrapper
+
+This compose file keeps only the knobs users usually change. It delegates the
+full command construction to `scripts/run-ds4-v8-server.sh`.
+
+```yaml
+services:
+  ds4:
+    image: docker:27-cli
+    container_name: ${WRAPPER_NAME:-ds4-v8-launcher}
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/rtx6kpro:/workspace:ro
+      - /root/.cache:/root/.cache
+    working_dir: /workspace
+    environment:
+      IMAGE: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v2226f26-b12x15cd38c-cu132-20260629}
+      NAME: ${NAME:-ds4-v8}
+      PORT: ${PORT:-8000}
+      GPUS: ${CUDA_VISIBLE_DEVICES:-0,1}
+      TP: ${TP:-2}
+      BACKEND: ${BACKEND:-b12x}
+      MODE: ${MODE:-standard-mtp0}
+      MAX_NUM_SEQS: ${MAX_NUM_SEQS:-64}
+      CACHE: ${CACHE:-/root/.cache/vllm-ds4-v8/ds4-v8}
+    command: ["scripts/run-ds4-v8-server.sh"]
+```
+
+Example:
+
+```bash
+BACKEND=lucifer-cutlass MODE=dspark TP=4 CUDA_VISIBLE_DEVICES=0,1,2,3 docker compose up
+```
+
+## Full Sweep Command
+
+The v8 benchmark was run with all 16 GPUs in TP-sized waves:
+
+```bash
+cd /root/rtx6kpro
+
+OUT=/root/bench-results/ds4-v8-v2226f26-20260630 \
+IMAGE=voipmonitor/vllm:eldritch-enlightenment-v2226f26-b12x15cd38c-cu132-20260629 \
+TPS=2,4 \
+MAX_NUM_SEQS=64 \
+DECODE_CONCURRENCY=1,16,32,64 \
+DECODE_CONTEXTS=0 \
+DECODE_DURATION=30 \
+PREFILL_CONTEXTS=8k,64k,128k \
+PREFILL_DURATION=10 \
+PORT_BASE=6100 \
+scripts/run-ds4-v8-sweep.sh
+```
+
+For the two B12X MTP2 8k prefill cells, the first full-sweep run included a
+cold artefact. Those two cells were rerun warm with the same server cache and
+are marked below.
+
+## Decode Throughput
+
+Sustained decode is aggregate tok/s from `llm_decode_bench.py`, `ctx=0`, 30
+seconds per cell. `coding peak` is the median generation-only tok/s over five
+Sieve-of-Eratosthenes cc1 runs; every row had `0` CJK runs.
+
+| TP | Backend | Mode | cc1 tok/s | cc16 tok/s | cc32 tok/s | cc64 tok/s | coding peak median | CJK runs |
+|---:|---|---|---:|---:|---:|---:|---:|---:|
+| 2 | b12x | standard-mtp0 | 130.6 | 732.4 | 1020.1 | 1371.4 | 131.5 | 0 |
+| 2 | b12x | standard-mtp2 | 218.1 | 886.6 | 1168.7 | 1483.3 | 229.4 | 0 |
+| 2 | b12x | dspark | 204.9 | 708.9 | 890.1 | 963.7 | 279.6 | 0 |
+| 2 | lucifer-default | standard-mtp0 | 116.1 | 779.1 | 1153.8 | 1765.4 | 116.9 | 0 |
+| 2 | lucifer-default | standard-mtp2 | 193.8 | 1064.2 | 1679.5 | 2585.2 | 210.1 | 0 |
+| 2 | lucifer-default | dspark | 184.7 | 996.1 | 1513.5 | 2232.3 | 261.7 | 0 |
+| 2 | lucifer-cutlass | standard-mtp0 | 115.8 | 842.5 | 1254.4 | 1949.2 | 117.1 | 0 |
+| 2 | lucifer-cutlass | standard-mtp2 | 202.8 | 1167.1 | 1821.1 | 2822.8 | 213.8 | 0 |
+| 2 | lucifer-cutlass | dspark | 207.7 | 1126.1 | 1710.0 | 2466.3 | 275.1 | 0 |
+| 4 | b12x | standard-mtp0 | 157.7 | 1073.8 | 1563.2 | 2129.4 | 159.4 | 0 |
+| 4 | b12x | standard-mtp2 | 279.0 | 1399.2 | 1826.9 | 2332.2 | 305.9 | 0 |
+| 4 | b12x | dspark | 267.8 | 1091.8 | 1354.2 | 1357.0 | 363.7 | 0 |
+| 4 | lucifer-default | standard-mtp0 | 138.7 | 1110.0 | 1690.9 | 2586.8 | 139.8 | 0 |
+| 4 | lucifer-default | standard-mtp2 | 246.3 | 1572.9 | 2476.2 | 3795.3 | 269.9 | 0 |
+| 4 | lucifer-default | dspark | 257.4 | 1480.2 | 2210.6 | 3092.1 | 339.0 | 0 |
+| 4 | lucifer-cutlass | standard-mtp0 | 132.2 | 1167.8 | 1827.7 | 2818.0 | 133.2 | 0 |
+| 4 | lucifer-cutlass | standard-mtp2 | 247.9 | 1729.5 | 2739.6 | 4079.3 | 267.4 | 0 |
+| 4 | lucifer-cutlass | dspark | 262.5 | 1624.9 | 2390.1 | 3268.9 | 368.1 | 0 |
+
+## Prefill Throughput
+
+Client-side prompt tokens / TTFT, `standalone-prefill`, prefix cache enabled but
+non-repeating prompts.
+
+| TP | Backend | Mode | 8k tok/s | 64k tok/s | 128k tok/s | Note |
+|---:|---|---|---:|---:|---:|---|
+| 2 | b12x | standard-mtp0 | 7763 | 5526 | 4121 |  |
+| 2 | b12x | standard-mtp2 | 7629 | 5483 | 4096 | warm rerun |
+| 2 | b12x | dspark | 7745 | 5609 | 4191 |  |
+| 2 | lucifer-default | standard-mtp0 | 13300 | 12563 | 11639 |  |
+| 2 | lucifer-default | standard-mtp2 | 12943 | 12426 | 11371 |  |
+| 2 | lucifer-default | dspark | 12291 | 12304 | 11114 |  |
+| 2 | lucifer-cutlass | standard-mtp0 | 12978 | 12348 | 11350 |  |
+| 2 | lucifer-cutlass | standard-mtp2 | 12907 | 12318 | 11349 |  |
+| 2 | lucifer-cutlass | dspark | 12441 | 12240 | 11301 |  |
+| 4 | b12x | standard-mtp0 | 9564 | 6393 | 4604 |  |
+| 4 | b12x | standard-mtp2 | 9446 | 6356 | 4592 | warm rerun |
+| 4 | b12x | dspark | 9295 | 6264 | 4497 |  |
+| 4 | lucifer-default | standard-mtp0 | 15465 | 14777 | 13466 |  |
+| 4 | lucifer-default | standard-mtp2 | 14967 | 14379 | 13174 |  |
+| 4 | lucifer-default | dspark | 14921 | 14631 | 13295 |  |
+| 4 | lucifer-cutlass | standard-mtp0 | 15110 | 14404 | 13148 |  |
+| 4 | lucifer-cutlass | standard-mtp2 | 14784 | 14140 | 12958 |  |
+| 4 | lucifer-cutlass | dspark | 14795 | 14373 | 13178 |  |
+
+## Quick Read
+
+- For raw cc1 decode without speculation, B12X is fastest in this matrix:
+  TP2 `130.6 tok/s`, TP4 `157.7 tok/s`.
+- For high-concurrency standard MTP2, Lucifer CUTLASS is strongest:
+  TP2 cc64 `2822.8 tok/s`, TP4 cc64 `4079.3 tok/s`.
+- DSpark improves cc1 heavily, especially TP4: B12X `363.7 tok/s` coding peak
+  and Lucifer CUTLASS `368.1 tok/s` coding peak.
+- B12X prefill is still materially slower than the Lucifer SM120 path. TP4
+  standard no-MTP 128k prefill is `4604 tok/s` on B12X versus `13466 tok/s` on
+  Lucifer default and `13148 tok/s` on Lucifer CUTLASS.
+- Lucifer default has the best prefill in this run; CUTLASS generally wins more
+  at high-concurrency decode with MTP2.
+
+## Artifacts
+
+```text
+/root/bench-results/ds4-v8-v2226f26-20260630/
+/root/bench-results/ds4-v8-v2226f26-20260630-rerun-b12x-mtp2-8k/
+/root/rtx6kpro/scripts/run-ds4-v8-server.sh
+/root/rtx6kpro/scripts/run-ds4-v8-sweep.sh
+```
+
+## Caveats
+
+- DSpark rows use the DSpark checkpoint, not the standard checkpoint with an
+  extra flag.
+- DSpark's native tested draft count is `5`; do not treat it as equivalent to
+  standard MTP2.
+- B12X MTP2 8k prefill values in the first full sweep were cold-start artefacts
+  and were replaced with same-cache warm reruns. The raw files are retained in
+  the artifact directory.
+- The helper scripts assume the model snapshots already exist under
+  `/root/.cache/huggingface/hub`. Override `STANDARD_MODEL` or `DSPARK_MODEL`
+  if your paths differ.
