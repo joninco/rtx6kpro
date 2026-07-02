@@ -420,7 +420,19 @@ fills + 2 DtoD ≈ 3 µs/layer from every decode graph). Target remains the a16 
 
 Falsified during the attempt (beyond §6.8.1): `atom_shape (1,8,1)` for the M16 band —
 hard `Floating point exception` in CuTe DSL layout construction (helpers support only
-the tested shapes).
+the tested shapes). Note the M16 W4A8 band is architecturally 6-warp: "six route warps
+… three two-warp token groups" with pair-owned producers — widening it is part of the
+redesign, not a knob.
+
+**Wrapper overhead root causes (for the +3 µs/layer):** the 2 DtoD are
+`_refresh_dynamic_workspace_scales` copying the [E] `input_gs`/`down_input_scale`
+vectors every launch — the skip memo lives on the `TPDynamicWorkspace`, which the
+eager-bind path reconstructs per call, so the src-pointer check never matches. A durable
+skip needs the memo on a binding cached across steps (or prefilled arena slots +
+contract change), since the eager-bind contract forbids bind-time writes under graph
+capture. The 2 fills are the `barrier_count/epoch` re-zeroes required by the epoch
+protocol; removing them means a self-cleaning kernel exit (kernel change). Both are
+~1.5 µs/layer each — worth folding into the tiny-M redesign, not standalone surgery.
 
 Per-M routing between w4a16 and w4a8_mx kernels was evaluated and is **not viable**:
 `required_weight_layout()` demands MMA_PACKED for w4a16 vs QMMA_REPACKED for w4a8_mx —
