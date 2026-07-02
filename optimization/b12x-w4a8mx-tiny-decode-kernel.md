@@ -30,6 +30,29 @@ open questions are flagged.
 > atomic scatters — isolated-neutral but −7% E2E — was the regression; removed
 > (vLLM commit `8e6e417c`).
 
+## MERGED (2026-07-03) + canonical-master validation
+
+Both PRs are in Luke's master (`a1c1e54` mappings/quant/SF, `a5f0e0c` tiny-decode), and
+Luke stacked further dense-GEMM work on top (`8de17f1` end-to-end MXFP8 GEMM,
+`a611e36` quant-per-warp). Follow-up [PR #23](https://github.com/lukealonso/b12x/pull/23)
+carries the rename (`tiny_rp` → `tiny_decode`) + **default-on** (kill switch
+`B12X_W4A8_TINY_DECODE=0`) that the squash-merge missed — until it lands, master needs
+`B12X_W4A8_TINY_RP=1`.
+
+**Full-B12X stack on merged master `a611e36`** (no DeepGEMM anywhere, DS4 TP2 A8,
+image `voipmonitor/vllm:eldritch-enlightenment-v3f65c52-b12xa611e36-overlay-cu132-20260703`):
+
+| | 8k | 64k | 128k | decode cc1 |
+|---|---:|---:|---:|---:|
+| full B12X, merged master + tiny | **13,550** | **13,088** | **12,102** | **136.3** |
+| Lucifer CUTLASS reference | 13,442 | 12,622 | 11,716 | — |
+| hybrid (DG linear) + tiny, for comparison | 13,811 | 13,201 | 12,182 | 140.2 |
+
+Full B12X now beats Lucifer at **all three** prefill contexts with no DeepGEMM. The
+remaining deltas to the hybrid (−1.9/−0.9/−0.7 % prefill, −3.9 t/s decode) are the
+dense-linear small/large-M bands — Luke's GEMM stream is actively closing them.
+Coherence clean (CJK 0) at 30k.
+
 ## Code access (everything Luke needs)
 
 - **vLLM PRs**: [#70 tiny-decode](https://github.com/local-inference-lab/vllm/pull/70)
