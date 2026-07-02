@@ -75,6 +75,16 @@ engage there (w4a8_mx-gated; GLM's tiny band is already W4A16 TC-decode micro).
 Merged master `dafb8d7` re-validated GLM-regression-free (86.32 vs 86.2–86.5 ref
 band; an initial 80.35 reading was a polluted host — a stray bench container).
 
+**Follow-up — "would a better-designed W4A8 help GLM?" No, measured:** GLM's NVFP4
+default is already **W4A4** (`quant_mode=nvfp4`, activations FP4 + e4m3/16 scales,
+prod-accepted numerics; decode band rides W4A16 TC micro). Forcing A16 vs the A4
+default bounds the whole activation-quant lever: prefill 5,473/5,592/5,226 (A16) vs
+5,798/5,960/5,599 (A4) = **+6–7 % total**; decode 85.0 vs 86.3. Since `mxf8f6f4` MMA
+only accepts ue8m0/32 scales, any W4A8 over NVFP4 weights must requant e4m3/16 weight
+scales (numerics ≤ A4) at an MMA rate below A4 — i.e. **W4A8 is strictly dominated by
+the shipping A4 mode for NVFP4 checkpoints**. DS4 needed `w4a8_mx` only because MXFP4
+checkpoints have no A4 path. The `w4a8_nvfp4` bridge stays a deletion/fix candidate.
+
 ## Code access (everything Luke needs)
 
 - **vLLM PRs**: [#70 tiny-decode](https://github.com/local-inference-lab/vllm/pull/70)
