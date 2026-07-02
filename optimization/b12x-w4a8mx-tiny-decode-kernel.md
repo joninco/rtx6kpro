@@ -8,10 +8,12 @@ open questions are flagged.
 
 > **FINAL STATE (2026-07-03): the kernel was rewritten in CuTe DSL inside b12x per
 > Luke's review and now beats every reference — [lukealonso/b12x PR #22](https://github.com/lukealonso/b12x/pull/22),
-> \`B12X_W4A8_TINY_RP=1\`: **20.6 µs/layer** at M=1 (dynamic 37.8, w4a16 fused 22.5),
+> **on by default** as of `de15849` (rename `tiny_rp` → `tiny_decode`; kill switch
+> `B12X_W4A8_TINY_DECODE=0`): **20.6 µs/layer** at M=1 (dynamic 37.8, w4a16 fused 22.5),
 > E2E decode cc1 **140.2 tok/s** = A16 parity (ITL 7.131 vs 7.136 ms) with the A8
 > prefill advantage intact. Zero vLLM changes; vLLM PR #70 closed as superseded.
-> Ready-to-run image: \`voipmonitor/vllm:eldritch-enlightenment-v3f65c52-b12xtinyrp5f80a9a-overlay-cu132-20260703\`.
+> Ready-to-run image (no env needed): \`voipmonitor/vllm:eldritch-enlightenment-v3f65c52-b12xtinydec-de15849-overlay-cu132-20260703\`
+> (E2E re-verified flagless: 140.16 tok/s).
 > DSL port highlights: hardware \`fp4_dot4\` decode + v4 16 B loads of the rp quads
 > (the (n8c,r8,cgrp)→four-8-apart-rows lane map), bf16x2 scatter-add epilogue with a
 > lane^4 row-pairing shuffle, BF16 activations. A cooperative single-launch variant
