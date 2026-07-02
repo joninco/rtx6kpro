@@ -62,6 +62,19 @@ mHC is prefill-only); the dense-linear M=1 band remains the hybrid's last edge
 (140.2 vs 136.2). Image:
 `voipmonitor/vllm:eldritch-enlightenment-v3f65c52-b12xc7d3eaf-overlay-cu132-20260703`.
 
+## GLM-5.2 note (2026-07-03): A8 does NOT transfer, and master is GLM-clean
+
+Asked whether GLM 5.2 (NVFP4 checkpoint, A16/w4a16 MoE) can adopt A8: **no.**
+`B12X_MOE_FORCE_A8=1` → `w4a8_nvfp4`, measured on the reference test config
+(TP8/DCP1/MTP off/B12X_MLA_SPARSE/seqs1/graph4): decode 84.93 vs 86.32 (−1.6 %),
+prefill 5,345/5,502/5,210 vs 5,798/5,960/5,599 (−7 to −8 %), and **broken 30k
+coherence (CJK 15, garbage)** — the nvfp4→MXFP8 bridge (e4m3/16 vs e8m0/32 blocks)
+looks numerically broken, FYI-grade bug (nobody serves it). DS4's A8 advantage is
+specific to the MXFP4-native `w4a8_mx` path. GLM stays A16; `tiny_decode` doesn't
+engage there (w4a8_mx-gated; GLM's tiny band is already W4A16 TC-decode micro).
+Merged master `dafb8d7` re-validated GLM-regression-free (86.32 vs 86.2–86.5 ref
+band; an initial 80.35 reading was a polluted host — a stray bench container).
+
 ## Code access (everything Luke needs)
 
 - **vLLM PRs**: [#70 tiny-decode](https://github.com/local-inference-lab/vllm/pull/70)
