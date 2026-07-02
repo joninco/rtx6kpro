@@ -16,7 +16,10 @@ v8 sweep already saved, and defines the run plan for the open experiments.
    MTP2 by concurrency (crossover table below), sweep `DSPARK_TOKENS=3/4/5`
    at cc16-64, and A/B `draft_sample_method` greedy vs probabilistic. The
    two implementation-level items are the conservative prefix-cache draft
-   rehydration and the B12X DSpark high-concurrency stall.
+   rehydration and the B12X DSpark high-concurrency stall. For cc1
+   specifically, the most promising untested lever is the 64 KB one-shot
+   all-reduce cap, which likely excludes DSpark's 6-token decode steps from
+   the fast path while both standard modes fit under it (E5).
 2. No - and the published numbers cannot be read as an acceptance ceiling.
    The v7 matrix acceptance (`34.7%`, `2.73 tok/step`) is a synthetic-decode
    floor, not a property of the deployment: real coding workloads measure
@@ -184,6 +187,74 @@ python3 scripts/dspark-acceptance-report.py --baseline before.prom after.prom
 - vLLM v0.24.0 shipped dynamic speculative decoding (2026-06-30); on a
   future rebase it could replace the manual DSpark-vs-MTP2 mode choice by
   scaling speculation with load.
+
+### E5: single-stream (cc1) throughput recipe
+
+cc1 is DSpark's home turf, and its levers are different from the cc16+ case:
+per-step latency dominates, and the verify batch (6 tokens) is so small that
+extra draft positions are nearly free. Keep `DSPARK_TOKENS=5` at cc1; the
+tuning targets are per-step all-reduce latency and drafter overhead.
+
+Baseline profile (best measured cc1 in v8): TP4 Lucifer CUTLASS DSpark -
+`287.9 tok/s` synthetic, `370.2 tok/s` coding peak. TP4 is +29% over TP2 for
+this mode; use 4 GPUs if they are free.
+
+Ranked cc1 experiments:
+
+1. **One-shot all-reduce size cap (`ONESHOT_MAX`).** The v8 helper pins
+   `VLLM_PCIE_ALLREDUCE_MAX_SIZE=64KB` for Lucifer backends. Decode
+   all-reduce payload per layer is `tokens_in_step x hidden_size x 2B`
+   (bf16). With the DeepSeek V3-lineage hidden size of 7168 (verify against
+   the checkpoint `config.json`), a cc1 step carries:
+
+   | Mode | Tokens/step | Payload | vs 64 KiB cap |
+   |---|---:|---:|---|
+   | `standard-mtp0` | 1 | 14 KiB | one-shot |
+   | `standard-mtp2` | 3 | 42 KiB | one-shot |
+   | `dspark` | 6 | 84 KiB | **falls back to PyNCCL** |
+
+   If confirmed, DSpark is the only mode whose cc1 decode all-reduces are
+   excluded from the one-shot path - on every layer of every step. The raw
+   crossover measurements say one-shot wins well past 84 KiB: up to 512 KB
+   on the switch topology
+   ([`asus-esc8000a-e13p-broadcom-switches.md`](../hardware/asus-esc8000a-e13p-broadcom-switches.md)),
+   120 KB auto-tuned on 4 GPUs
+   ([`pcie-oneshot-allreduce.md`](../optimization/pcie-oneshot-allreduce.md)).
+   The helper now takes the cap as an env:
+
+   ```bash
+   # A/B: default 64KB vs 128KB, TP4 Lucifer CUTLASS DSpark
+   TP=4 GPUS=0,1,2,3 BACKEND=lucifer-cutlass MODE=dspark \
+   ONESHOT_MAX=128KB NAME=ds4-v8-dspark-ar128 scripts/run-ds4-v8-server.sh
+   ```
+
+   Verify in the server log which path the decode all-reduce selects at
+   each size, and confirm `hidden_size` first. Gates: the 64 KB cap may be
+   part of the language-hallucination mitigation (2026-06-30: all-reduce
+   payload reduction cut corruption latency 6-7ms to 1.5ms), so the CJK-run
+   counter must stay `0`; also re-check 64k/128k prefill for regressions
+   since larger one-shot payloads affect mixed batches.
+2. **`SAMPLE=greedy` (E2).** Drafter hot-path cost is pure per-step latency,
+   which is why the Kimi analog showed its ~13% penalty specifically at c1.
+   Same command and quality gate as E2.
+3. **Host prerequisites.** One-shot AR only helps if P2P BAR1 mapping is
+   active - on direct-attach (NODE) topology the nvidia `ForceP2P` override
+   is mandatory or the kernel silently degrades ~15x
+   ([`pcie-oneshot-allreduce.md`](../optimization/pcie-oneshot-allreduce.md)).
+   Check GPU power limits too: the 241 tok/s community coding number was
+   measured at 300 W; the v8 numbers assume full power.
+4. **Client-side sampling.** Acceptance (and thus cc1 throughput) rises as
+   client temperature drops; temperature 0 is the cc1-throughput-optimal
+   request shape for agentic coding.
+
+For agentic cc1 loops specifically, the prefix-cache rehydration item in E4
+is also on the critical path: every turn starts with a no-draft window after
+the prefix-cache hit, which is pure lost cc1 throughput.
+
+Not worth chasing at cc1: `DSPARK_TOKENS<5` (only helps when verify-batch
+cost matters, i.e. cc16+), TP8 (cross-socket system-scope barriers penalize
+the one-shot path and GLM TP8+MTP regressed with it), and B12X (cc1 coding
+peak 363.7 is close, but it loses everywhere else in the DSpark matrix).
 
 ## Verdict on "Best Possible" Acceptance
 
