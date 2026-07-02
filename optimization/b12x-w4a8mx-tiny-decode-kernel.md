@@ -85,6 +85,25 @@ scales (numerics ≤ A4) at an MMA rate below A4 — i.e. **W4A8 is strictly dom
 the shipping A4 mode for NVFP4 checkpoints**. DS4 needed `w4a8_mx` only because MXFP4
 checkpoints have no A4 path. The `w4a8_nvfp4` bridge stays a deletion/fix candidate.
 
+## 2026-07-03 late: GLM joins w4a8_mx via checkpoint conversion; DS4 full-B12X reaches total parity
+
+**GLM**: converted `zai-org/GLM-5.2-FP8` into a DS4-Flash-style mixed checkpoint
+(FP8 dense/attention + **MXFP4 routed experts**, offline OCP requant, per-tensor cos
+0.9935, 7.6 min GPU convert) + `store_dtype: "mxfp4"` in quantization_config → the
+`fp8.py` DeepSeek-style branch → B12X Mxfp4 MoE → `w4a8_mx` **with tiny_decode
+engaged** (GLM TP8 shard n=256 passes the gate). Measured vs the NVFP4-A4 baseline:
+**decode 92.94 vs 86.32 (+7.7 %)**, prefill 5,768/6,140/5,750 vs 5,798/5,960/5,599
+(−0.5/+3.0/+2.7 %), 30k coherence clean. KLD quality gate pending. Checkpoint:
+`/root/models/GLM-5.2-FP8-MXFP4experts` (converter script in the session scratchpad;
+worth landing in rtx6kpro/code).
+
+**DS4 @ b12x `f416b75`** (WO-projection dense-GEMM port, quant-A split-K, WO PDL
+chaining): full-B12X decode **140.2** (= hybrid parity; first post-boot run reads
+~132, a cold-start artifact — ignore run 1), prefill **13,822/13,316/12,285** (ties
+hybrid at 8k, beats it at 64k/128k). **Full B12X ≥ DG hybrid on every axis; DeepGEMM
+is retired.** Luke's CuTe-side PDL chaining shows none of the Triton `launch_pdl`
+−7 % trap.
+
 ## Code access (everything Luke needs)
 
 - **vLLM PRs**: [#70 tiny-decode](https://github.com/local-inference-lab/vllm/pull/70)
