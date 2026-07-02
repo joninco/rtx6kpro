@@ -108,6 +108,7 @@ partially L2-resident); comparisons are apples-to-apples.
 | `num_stages=2/4` on the kt loop | 97–101 | staged 16 KB tile buffers ⇒ spills — **do not pipeline this loop** |
 | `num_warps=4` | 10,966 (!) | 32 elems/thread ⇒ total spill catastrophe |
 | `cache_modifier='.cs'` | n/a | not supported by this Triton build |
+| **PDL overlap** (FC1 `gdc_launch_dependents` at entry; FC2 loads w2+scales, `gdc_wait`, then inter reads; `launch_pdl=True` on FC2; Triton 3.7 intrinsics) | 28.7 isolated, **131.3 E2E** | compiles + correct, but same −7% E2E as relaxed atomics — suspicious that both exotic variants land at exactly ~131.3 (a graph-replay fast path being disabled?). Reverted; E2E re-confirmed 138.69 after revert. Worth a Luke-level look at what PDL/relaxed do to the captured graph. |
 
 NCU (isolated, M=1): FC1 27.5 µs @ ~57% DRAM, 80 regs/thread; FC2 18.6 µs @ ~42%,
 77 regs/thread; no spills. Headroom to a16's 22.5 exists mainly in FC2 utilization and
@@ -139,8 +140,12 @@ policy Triton emits, which matters under real mixed traffic but not with a warm 
 
 ## 7. Next steps (parallel-friendly)
 
-- Resolve §6; target is ≥138.7 reproducible (projection with 28.7 µs/layer + 2 µs
-  wrapper vs 37.8 for dynamic ⇒ ~141).
+- ~~Resolve §6~~ done — 138.7 reproducible (4 measurements across 3 restarts:
+  138.81/138.66/138.69 + first-boot 138.74).
+- The remaining −1.8 t/s to the A16 reference (140.5) needs FC1/FC2 overlap that does
+  NOT go through PDL or relaxed atomics (both measured −7% E2E, see §4) — i.e. a true
+  single fused kernel; the fused CTA-shape that failed for us (§4, 512 B strips) might
+  work with CuTe-DSL-style manual smem staging instead of Triton.
 - FC2 utilization (42% DRAM): candidates — split FC2 differently (out-tile × expert),
   vectorize the inter reads across kt, or fold FC2 into FC1's tail for its own expert.
 - M=2–4 support (per-expert row batching instead of per-routed-row weight re-reads) —
