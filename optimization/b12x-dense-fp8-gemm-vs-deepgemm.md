@@ -311,6 +311,46 @@ the full-B12X stack (rows #3/#4 → above row #5), which would make the pure
 `--linear-backend b12x` stack the single fastest config and obsolete both the vLLM
 dual-path and the hybrid recommendation.
 
+## 6.8 Related: why A8-forced MoE decodes slower than A16 (133 vs 140 tok/s)
+
+Not a dense-linear issue, but root-caused in the same session. DS4 TP2 E2E: A16-forced
+decode ITL 7.14 ms (140.5 t/s) vs A8-forced ~7.7 ms (~130). Isolated MoE benchmark
+(`benchmarks/benchmark_ds4_moe.py`, E=256 K=4096 I_tp=1024 topk=6):
+
+| M | w4a8_mx | w4a16 |
+|---:|---:|---:|
+| 1 | 0.308 ms | **0.276 ms** |
+| 4 | 0.305 ms | **0.274 ms** |
+| 8 | 0.309 ms | **0.279 ms** |
+| 64 | 0.863 ms | **0.819 ms** |
+| 8192 | **2.817 ms** | 4.848 ms |
+
+Per-kernel decode profile at M=4 (torch profiler, per layer-call): w4a16 = one
+`W4A16FusedMoeKernel`, **75.0 µs**; w4a8_mx = `MoEDynamicKernelSilu` **84.9 µs** + 2×DtoD
+memcpy + 2×fill (**+3.2 µs**). Δ ≈ 13 µs × 61 MoE layers ≈ 0.8 ms/token — matches the E2E
+ITL delta.
+
+**Root cause is a storage-policy decision, not kernel physics**
+(`b12x/integration/tp_moe.py::_resolve_workspace_layout`): `w4a8_nvfp4` keeps
+source-native weights, so its tiny-decode band (m≤8) runs the **direct-micro kernel —
+measured 2.2× faster than the dynamic kernel** (0.076 vs 0.169 ms at m=8/topk=10, per the
+in-code comment). `w4a8_mx` repacks weights **in-place** into the dynamic kernel's
+N256/K128 layout (to avoid a second copy of ~45 GB/rank of expert weights), and the micro
+kernel cannot read that layout → tiny decode is hard-wired to `"dynamic"`.
+
+Fix directions (both b12x-side):
+1. **Micro-kernel variant that consumes the N256/K128 repacked layout** (micro already
+   has `a8_mx_mode`/`e8m0_scale_layout` hooks) — memory-neutral, and per Luke's own 2.2×
+   micro-vs-dynamic measurement it should bring A8 decode to ≥ A16 (≈140 t/s) **while
+   keeping the A8 prefill advantage (+72% MoE at M=8192)** — the best of both modes in
+   one config.
+2. Incremental: tune `MoEDynamicKernelSilu` for m≤8 (close 84.9 → 75 µs) and remove the
+   2×DtoD + 2×fill from the w4a8 binding path.
+
+Per-M routing between w4a16 and w4a8_mx kernels was evaluated and is **not viable**:
+`required_weight_layout()` demands MMA_PACKED for w4a16 vs QMMA_REPACKED for w4a8_mx —
+two physical copies of the MoE weights (~+45 GB/rank on DS4-Flash).
+
 ## 7. Recommended configs
 
 **Today (no patches, stock image) — the hybrid, fastest overall:**
