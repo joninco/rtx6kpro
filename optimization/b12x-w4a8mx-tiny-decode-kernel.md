@@ -6,12 +6,13 @@ replacing the b12x dynamic grouped kernel at M=1 with two Triton kernels that re
 Luke can pick this up / work in parallel — every iteration below is measured, and the
 open questions are flagged.
 
-> **State (2026-07-02 late):** kernel is correct (cos vs fp32 oracle **0.999999**,
-> better than the production w4a8 dynamic kernel's 0.9990) and fast in isolation
-> (**28.7 µs/layer at M=1** vs dynamic 34.8 µs, a16 fused 22.5 µs, graph-replay,
-> same-routing L2-warm conditions). First E2E serve run measured **138.7 tok/s**
-> DS4 TP2 A8 decode cc1 (baseline 133.7); post-restart runs read ~131 — a
-> restart-to-restart variance/regression question is open (§6).
+> **State (2026-07-02 late, updated):** kernel is correct (cos vs fp32 oracle
+> **0.999999**, better than the production w4a8 dynamic kernel's 0.9990), fast in
+> isolation (**28.8 µs/layer at M=1** vs dynamic 34.8 µs, a16 fused 22.5 µs), and
+> **E2E-reproducible at 138.7–138.8 tok/s** DS4 TP2 A8 decode cc1 (baseline 133.7,
+> A16 reference 140.5). The §6 "restart variance" was solved: `sem='relaxed'` on the
+> atomic scatters — isolated-neutral but −7% E2E — was the regression; removed
+> (vLLM commit `e06e4030`-ish, see branch head).
 
 ## Branches / commits
 
@@ -84,7 +85,7 @@ partially L2-resident); comparisons are apples-to-apples.
 | fused single-kernel FC1+FC2 (3 variants incl. axis-separable affine + `<<`→`*` + num_stages) | 96–111 | per-program 512 B strips + register pressure; abandoned in favor of the 2-kernel shape |
 | v7: hoisted activation loads + `KT_PER_PROG` 4→2/1 | 30.7 | fewer per-j gathers; more programs |
 | `KT_PER_PROG=1` (FC1 grid = rt×8×32) | **28.8** | shorter streams win |
-| relaxed atomics | 28.7 | noise-level |
+| relaxed atomics | 28.7 | isolated noise-level, **but −7% E2E in serving (131 vs 138.7) — do not use** |
 | `num_stages=2/4` on the kt loop | 97–101 | staged 16 KB tile buffers ⇒ spills — **do not pipeline this loop** |
 | `num_warps=4` | 10,966 (!) | 32 elems/thread ⇒ total spill catastrophe |
 | `cache_modifier='.cs'` | n/a | not supported by this Triton build |
@@ -103,24 +104,19 @@ decode graphs capture the Triton kernels fine.
 | Run | decode cc1 ITL | tok/s |
 |---|---:|---:|
 | baseline (dynamic MoE) | 7.477 ms | 133.7 |
-| tiny v1 module, first boot | **7.208 ms** | **138.7** |
-| tiny + fused-zero variant, after restart | 7.616 ms | 131.3 |
-| tiny reverted to v1 + relaxed atomics, after restart | 7.635 ms | 131.0 |
+| tiny v1 module, first boot | 7.208 ms | 138.7 |
+| tiny + fused-zero variant + relaxed atomics, after restart | 7.616 ms | 131.3 |
+| tiny + relaxed atomics only, after restart | 7.635 ms | 131.0 |
+| **tiny final (default-sem atomics), fresh restart, run 1/2** | **7.204 / 7.212 ms** | **138.81 / 138.66** |
 
-## 6. OPEN QUESTION — restart variance (the current blocker)
+## 6. SOLVED — the "restart variance" was relaxed atomics
 
-The first boot measured 138.7; after `docker restart` (same code paths modulo
-relaxed atomics / zero handling, both isolated-neutral) runs read ~131 — *below*
-baseline. Not yet root-caused. Hypotheses to check, in order:
-
-1. Same-boot A/B: measure baseline (env off) and tiny (env on) in the SAME boot,
-   ideally twice each, to remove boot-to-boot variance (graph pool layout, allocator
-   state, clocks).
-2. The exact v1 module bits (no relaxed atomics) vs current — one-line revert.
-3. Whether `docker restart` reuses a degraded state (triton cache in /cache mounts is
-   shared across boots; the tiny kernels JIT at warmup either way).
-4. Per-step kernel times in the live graph (torch profiler relaunch) — confirm the tiny
-   kernels actually run at ~29 µs in-graph in serving, not just in the microbench.
+Reverting `sem='relaxed'` → default semantics on both `tl.atomic_add` scatters restored
+138.81/138.66 tok/s across two runs on a fresh restart. Lesson for kernel authors: the
+isolated graph-replay microbench (identical routing every replay ⇒ L2-warm weights)
+completely masked a 7% E2E effect — always confirm atomic/caching-semantics changes
+end-to-end. Root cause hypothesis: relaxed semantics change the RED instruction/L2
+policy Triton emits, which matters under real mixed traffic but not with a warm L2.
 
 ## 7. Next steps (parallel-friendly)
 
