@@ -53,6 +53,15 @@ remaining deltas to the hybrid (−1.9/−0.9/−0.7 % prefill, −3.9 t/s decod
 dense-linear small/large-M bands — Luke's GEMM stream is actively closing them.
 Coherence clean (CJK 0) at 30k.
 
+**Update (`c7d3eaf`, "Optimize mHC prefill projection for large prompts"):** Luke's
+TF32-TMA mHC projection rewrite (chunk tiles M192/K64, k-split 8, tuned at 4096/8192
+tokens) closes the prefill gap entirely — full B12X now **13,801 / 13,315 / 12,314**
+@8k/64k/128k vs hybrid 13,811/13,201/12,182: a tie at 8k and a **win at 64k (+0.9 %)
+and 128k (+1.1 %)**. Lucifer is −2.7/−5.5/−5.1 % behind. Decode unchanged (136.2 —
+mHC is prefill-only); the dense-linear M=1 band remains the hybrid's last edge
+(140.2 vs 136.2). Image:
+`voipmonitor/vllm:eldritch-enlightenment-v3f65c52-b12xc7d3eaf-overlay-cu132-20260703`.
+
 ## Code access (everything Luke needs)
 
 - **vLLM PRs**: [#70 tiny-decode](https://github.com/local-inference-lab/vllm/pull/70)
