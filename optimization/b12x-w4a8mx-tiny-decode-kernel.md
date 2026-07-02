@@ -16,6 +16,8 @@ open questions are flagged.
 
 ## Code access (everything Luke needs)
 
+- **vLLM PRs**: [#70 tiny-decode](https://github.com/local-inference-lab/vllm/pull/70)
+  (stacked on [#69 dual-path linear](https://github.com/local-inference-lab/vllm/pull/69)).
 - **vLLM branch (integrated)**: https://github.com/local-inference-lab/vllm/tree/fable/b12x-w4a8mx-tiny-decode-20260702 —
   head `8e6e417c` (`fix: drop relaxed atomics`), kernel commit `6896d418`. Files:
   [`vllm/model_executor/layers/fused_moe/b12x_tiny_decode.py`](https://github.com/local-inference-lab/vllm/blob/fable/b12x-w4a8mx-tiny-decode-20260702/vllm/model_executor/layers/fused_moe/b12x_tiny_decode.py)
