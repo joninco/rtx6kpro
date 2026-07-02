@@ -6,6 +6,20 @@ replacing the b12x dynamic grouped kernel at M=1 with two Triton kernels that re
 Luke can pick this up / work in parallel — every iteration below is measured, and the
 open questions are flagged.
 
+> **FINAL STATE (2026-07-03): the kernel was rewritten in CuTe DSL inside b12x per
+> Luke's review and now beats every reference — [lukealonso/b12x PR #22](https://github.com/lukealonso/b12x/pull/22),
+> \`B12X_W4A8_TINY_RP=1\`: **20.6 µs/layer** at M=1 (dynamic 37.8, w4a16 fused 22.5),
+> E2E decode cc1 **140.2 tok/s** = A16 parity (ITL 7.131 vs 7.136 ms) with the A8
+> prefill advantage intact. Zero vLLM changes; vLLM PR #70 closed as superseded.
+> Ready-to-run image: \`voipmonitor/vllm:eldritch-enlightenment-v3f65c52-b12xtinyrp5f80a9a-overlay-cu132-20260703\`.
+> DSL port highlights: hardware \`fp4_dot4\` decode + v4 16 B loads of the rp quads
+> (the (n8c,r8,cgrp)→four-8-apart-rows lane map), bf16x2 scatter-add epilogue with a
+> lane^4 row-pairing shuffle, BF16 activations. A cooperative single-launch variant
+> with a resident grid barrier **deadlocked under TP2 serving** (rank-skewed first-use
+> compile broke co-residency) — the landed two-plain-launch form is deadlock-free by
+> construction and measured faster (20.6 vs 30.8 µs). Sections below document the
+> Triton prototype journey that produced the layout tricks.
+
 > **State (2026-07-02 late, updated):** kernel is correct (cos vs fp32 oracle
 > **0.999999**, better than the production w4a8 dynamic kernel's 0.9990), fast in
 > isolation (**28.8 µs/layer at M=1** vs dynamic 34.8 µs, a16 fused 22.5 µs), and
