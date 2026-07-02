@@ -93,7 +93,10 @@ checkpoints have no A4 path. The `w4a8_nvfp4` bridge stays a deletion/fix candid
 `fp8.py` DeepSeek-style branch → B12X Mxfp4 MoE → `w4a8_mx` **with tiny_decode
 engaged** (GLM TP8 shard n=256 passes the gate). Measured vs the NVFP4-A4 baseline:
 **decode 92.94 vs 86.32 (+7.7 %)**, prefill 5,768/6,140/5,750 vs 5,798/5,960/5,599
-(−0.5/+3.0/+2.7 %), 30k coherence clean. KLD quality gate pending. Checkpoint:
+(−0.5/+3.0/+2.7 %), 30k coherence clean. KLD quality gate pending.
+**Update on b12x `f416b75`** (quant-A split-K): GLM decode **99.1** (99.12/98.90,
+coherence clean; prefill unchanged) — total GLM decode gain over the NVFP4-A4
+baseline is now **+14.8 %**. Checkpoint:
 `/root/models/GLM-5.2-FP8-MXFP4experts` (converter script in the session scratchpad;
 worth landing in rtx6kpro/code).
 
