@@ -89,6 +89,7 @@ run_case() {
   wait_for_server "$name" "$port"
   curl -fsS "http://127.0.0.1:${port}/version" > "$case_dir/version.json" || true
   curl -fsS "http://127.0.0.1:${port}/v1/models" > "$case_dir/models.json"
+  curl -fsS "http://127.0.0.1:${port}/metrics" > "$case_dir/baseline-metrics.prom" || true
 
   echo "==> decode $label"
   python3 "$BENCH" \
@@ -107,6 +108,11 @@ run_case() {
     --coding-peak-runs 5 \
     --output "$case_dir/decode.json" \
     2>&1 | tee "$case_dir/decode.log"
+
+  # Decode-stage spec-decode acceptance snapshot: decode-metrics minus
+  # baseline-metrics isolates the decode+coding-peak stage from prefill.
+  # Analyze with scripts/dspark-acceptance-report.py --sweep "$OUT".
+  curl -fsS "http://127.0.0.1:${port}/metrics" > "$case_dir/decode-metrics.prom" || true
 
   echo "==> prefill $label"
   python3 "$BENCH" \

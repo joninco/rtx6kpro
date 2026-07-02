@@ -289,6 +289,14 @@ non-repeating prompts.
 /root/rtx6kpro/scripts/run-ds4-v8-sweep.sh
 ```
 
+## Follow-Up
+
+DSpark acceptance analysis, the "is acceptance best possible" verdict, and
+the tuning plan for draft length and draft sampling live in
+[`ds4dspark-v8-study.md`](./ds4dspark-v8-study.md). The per-cell
+`final-metrics.prom` snapshots from this sweep can be analyzed with
+`scripts/dspark-acceptance-report.py`.
+
 ## Caveats
 
 - DSpark rows use the DSpark checkpoint, not the standard checkpoint with an
