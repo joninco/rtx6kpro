@@ -14,6 +14,25 @@ open questions are flagged.
 > atomic scatters — isolated-neutral but −7% E2E — was the regression; removed
 > (vLLM commit `8e6e417c`).
 
+## Code access (everything Luke needs)
+
+- **vLLM branch (integrated)**: https://github.com/local-inference-lab/vllm/tree/fable/b12x-w4a8mx-tiny-decode-20260702 —
+  head `8e6e417c` (`fix: drop relaxed atomics`), kernel commit `6896d418`. Files:
+  [`vllm/model_executor/layers/fused_moe/b12x_tiny_decode.py`](https://github.com/local-inference-lab/vllm/blob/fable/b12x-w4a8mx-tiny-decode-20260702/vllm/model_executor/layers/fused_moe/b12x_tiny_decode.py)
+  + a 10-line hook at the top of `_run_b12x_moe_fp4` in `b12x_moe.py`.
+- **Standalone kit (this repo)**: [`optimization/code/tiny-decode/`](code/tiny-decode/) —
+  final kernels, the fp32-oracle/timing driver, and the abandoned fused variant.
+- **Docker image (code baked in, ready to serve)**:
+  `voipmonitor/vllm:eldritch-enlightenment-v8e6e417c-b12x77bd50e-tinymoe-overlay-cu132-20260702`
+  (pushed to Docker Hub; base v3f65c52-b12x77bd50e + the branch's vllm tree).
+  Enable with `-e VLLM_B12X_W4A8_MX_TINY_DECODE=1` on the hybrid DS4 launch — no bind
+  mounts needed.
+- **Mappings prerequisite**: `lukealonso/b12x` PR #21 (`123a16f`,
+  `tests/test_w4a8_rp_inverse_mapping.py`).
+
+Measured with the baked image + env flag: decode cc1 **138.7–138.8 tok/s**, prefill
+unchanged (12,202 tok/s @128k vs 12,182 hybrid reference), 30k coherence clean.
+
 ## Branches / commits
 
 | What | Where |
