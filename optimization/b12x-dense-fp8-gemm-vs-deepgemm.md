@@ -338,14 +338,50 @@ in-code comment). `w4a8_mx` repacks weights **in-place** into the dynamic kernel
 N256/K128 layout (to avoid a second copy of ~45 GB/rank of expert weights), and the micro
 kernel cannot read that layout → tiny decode is hard-wired to `"dynamic"`.
 
-Fix directions (both b12x-side):
+### 6.8.1 Deeper decode data (graph-replay, µs/layer)
+
+| M | a8 dynamic (default) | a8 MAC=94 | a8 MAC=188 | a16 fused |
+|---:|---:|---:|---:|---:|
+| 1 | 34.8 | 34.8 | 34.8 | **22.5** |
+| 4 | 88.0 | 85.1 | 81.9 | **75.6** |
+| 8 | 210.0 | 209.4 | 226.0 | **190.4** |
+
+The M=1 row is the one that matters for cc1 decode (seqs=1, MTP off): **34.8 vs 22.5 µs =
++55%**, ×61 MoE layers ≈ 0.75 ms/token — the entire A8-vs-A16 E2E ITL gap. a16 at M=1 is
+essentially at the BW floor (6 experts × 6.3 MB ≈ 24 µs at ~1.6 TB/s).
+
+NCU at M=1 (both kernels, grid = 96 CTAs, work-limited — MAC has no effect here):
+
+| | a8 `MoEDynamicKernelSilu` | a16 `W4A16FusedMoeKernel` |
+|---|---:|---:|
+| duration | 42.5 µs | 33.5 µs |
+| DRAM throughput | 55.5% | **70.3%** |
+| L2 bytes | 46.2 MB (+8.8%) | 42.4 MB |
+| block size | **192 (6 warps)** | **256 (8 warps)** |
+| warps active | 12.5% | 16.7% |
+
+Falsified knobs (all measured):
+- `B12X_DYNAMIC_W4A8_DECODE_MAX_ACTIVE_CLUSTERS` ∈ {94, 128, 188}: no effect at M=1
+  (grid is work-limited at 96 CTAs), −7% at M=4 with 188, **regression at M=8** (226 µs).
+  The tuned `((64,64),)` ladder in `b12x/moe/tuning/decode.max_active_clusters.py` is
+  already near-optimal for its structure.
+- `B12X_DYNAMIC_TILE_MN=16x64 / 32x64`: **does not compile** — SFB TMA partition is
+  written for tile_n=128 (`expects smem and gmem have the same size in the first rank`,
+  dynamic.py:3182). tile_m=16 is already the decode ladder choice.
+- Per-launch wrapper overhead outside the kernel: 2×`FillFunctor<int>` =
+  `barrier_count.zero_() + barrier_epoch.zero_()` (volatile_launch_state=True on the
+  vLLM eager-bind path) + 2× small DtoD ≈ **3.0 µs/layer ≈ 0.18 ms/token**.
+
+Fix directions (both b12x-side, in expected-value order):
 1. **Micro-kernel variant that consumes the N256/K128 repacked layout** (micro already
-   has `a8_mx_mode`/`e8m0_scale_layout` hooks) — memory-neutral, and per Luke's own 2.2×
-   micro-vs-dynamic measurement it should bring A8 decode to ≥ A16 (≈140 t/s) **while
-   keeping the A8 prefill advantage (+72% MoE at M=8192)** — the best of both modes in
-   one config.
-2. Incremental: tune `MoEDynamicKernelSilu` for m≤8 (close 84.9 → 75 µs) and remove the
-   2×DtoD + 2×fill from the w4a8 binding path.
+   has `a8_mx_mode`/`e8m0_scale_layout` hooks) — memory-neutral; per Luke's own 2.2×
+   micro-vs-dynamic measurement it should put A8 decode at or below a16's 22.5 µs/layer
+   → **A8 decode ≈143 t/s while keeping the A8 prefill advantage (+72% MoE at M=8192)**
+   — the best of both modes in one config, no trade-off left.
+2. Alternatively harden the dynamic kernel's M=1 band: widen to 8 warps/256 threads
+   (a16 gets 70% vs 55% DRAM util from exactly this), trim the +8.8% L2 byte overhead,
+   and fold the barrier re-zeroes into the kernel Phase-0 prologue (as its other
+   counters already are) to drop the 2 fills + 2 DtoD from the graph.
 
 Per-M routing between w4a16 and w4a8_mx kernels was evaluated and is **not viable**:
 `required_weight_layout()` demands MMA_PACKED for w4a16 vs QMMA_REPACKED for w4a8_mx —
