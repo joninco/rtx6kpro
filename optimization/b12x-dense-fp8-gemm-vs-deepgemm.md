@@ -368,6 +368,14 @@ Falsified knobs (all measured):
 - `B12X_DYNAMIC_TILE_MN=16x64 / 32x64`: **does not compile** — SFB TMA partition is
   written for tile_n=128 (`expects smem and gmem have the same size in the first rank`,
   dynamic.py:3182). tile_m=16 is already the decode ladder choice.
+- widening the M16 W4A8 band to 8 MMA warps (`atom_shape (1,8,1)`, mirroring a16's
+  256-thread advantage): **hard compiler crash** (`Floating point exception` during CuTe
+  DSL layout construction) — the SM120 helper stack only supports Luke's tested atom
+  shapes ((1,4,1) works, (1,8,1) and dense's (2,4,1) do not).
+- Note the N256/K128 weight repack itself (`_copy_qweight_to_w4a8_rp_inplace`) is a pure
+  int32 reshape+permute — affinely invertible, so a zero-copy source-native *view* of the
+  repacked buffer exists in principle; whether micro's TMA boxes can consume that stride
+  pattern is the open question for path (1).
 - Per-launch wrapper overhead outside the kernel: 2×`FillFunctor<int>` =
   `barrier_count.zero_() + barrier_epoch.zero_()` (volatile_launch_state=True on the
   vLLM eager-bind path) + 2× small DtoD ≈ **3.0 µs/layer ≈ 0.18 ms/token**.

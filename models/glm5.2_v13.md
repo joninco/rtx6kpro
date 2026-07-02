@@ -7,8 +7,8 @@ A16, FP8 KV cache, vLLM V2 model runner, and optional MTP3.
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629
-voipmonitor/vllm@sha256:534ad1a3f7e5877ee131b0ad886f6d372fd40b787a2bd2f3e98a40573d51ddcf
+voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x15cd38c-cu132-20260629
+voipmonitor/vllm@sha256:2ddd49e4ee162ea79a0f2e537aec3e18918bef168e3d684cfa5332151c7fbe2e
 ```
 
 | Component | Revision |
@@ -17,13 +17,13 @@ voipmonitor/vllm@sha256:534ad1a3f7e5877ee131b0ad886f6d372fd40b787a2bd2f3e98a4057
 | vLLM branch | `codex/eldritch-head66-b12xmla-20260629` |
 | vLLM commit | `8722ac7f8427919ed67bfe9c5e47b3cc30dfbf2e` |
 | B12X branch | `master` |
-| B12X commit | `8ce61f9b8dbbb54e8d9cf46740d56f533cb2e7e7` |
+| B12X commit | `15cd38ce3f10ee5cb7db1179cbc7c88fd15e37b7` |
 | FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
 | DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` |
 | CUDA / cuBLAS | CUDA `13.2.1`; `libcublas13-cuda-13=13.4.1.2-1`; the base image also carries legacy `libcublas-13-2=13.4.0.1-1` |
 | cuDNN / NCCL | cuDNN `9.22.0.52-1`, local NCCL `2.30.4` |
 | PyTorch | `2.12.0+cu132` |
-| Docker build helper | `/root/vllm/blackwell-llm-docker/build-eldritch-enlightenment-head66-cu132.sh` |
+| Docker build helper | `/root/vllm/blackwell-llm-docker/build-eldritch-enlightenment-head66-pr20-cu132.sh` |
 
 The image is a clean Docker build, not a runtime overlay.
 See [`eldritch-enlightenment-docker.md`](./eldritch-enlightenment-docker.md) for the exact
@@ -94,7 +94,7 @@ This compose file supports SM120 or B12X attention. Use
 ```yaml
 services:
   glm52:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x15cd38c-cu132-20260629}
     container_name: ${NAME:-glm52-v13}
     network_mode: host
     ipc: host
@@ -223,7 +223,7 @@ docker run -d --name glm52-v13 \
   -e VLLM_USE_V2_MODEL_RUNNER=1 \
   -e B12X_W4A16_TC_DECODE=1 \
   -e B12X_MOE_FORCE_A16=1 \
-  voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629 \
+  voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x15cd38c-cu132-20260629 \
   /bin/bash -lc 'unset NCCL_GRAPH_FILE NCCL_GRAPH_DUMP_FILE VLLM_B12X_MLA_EXTEND_MAX_CHUNKS; exec vllm serve /root/.cache/huggingface/hub/models--lukealonso--GLM-5.2-NVFP4/snapshots/8a1f4a13204acf2b7ac840375efaed64c231c522 --served-model-name GLM-5.2-NVFP4 --host 0.0.0.0 --port 8000 --trust-remote-code --tensor-parallel-size 8 --decode-context-parallel-size 1 --quantization modelopt_fp4 --kv-cache-dtype fp8 --attention-backend FLASHINFER_MLA_SPARSE_SM120 --moe-backend b12x --load-format fastsafetensors -cc.pass_config.fuse_allreduce_rms=True --gpu-memory-utilization 0.955 --max-model-len 262144 --max-num-seqs 32 --max-num-batched-tokens 8192 --max-cudagraph-capture-size 128 --async-scheduling --enable-chunked-prefill --enable-prefix-caching --enable-auto-tool-choice --tool-call-parser glm47 --reasoning-parser glm45 --default-chat-template-kwargs "{\"reasoning_effort\":\"high\"}" --hf-overrides "{\"use_index_cache\":true,\"index_topk_pattern\":\"FFFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSS\"}" --speculative-config "{\"method\":\"mtp\",\"num_speculative_tokens\":3,\"moe_backend\":\"b12x\",\"draft_sample_method\":\"probabilistic\"}"'
 ```
 
@@ -261,7 +261,7 @@ Example compose override for TP6/DCP6/MTP3, using the compose file shown
 above:
 
 ```bash
-IMAGE=voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629 \
+IMAGE=voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x15cd38c-cu132-20260629 \
 TP_SIZE=6 \
 DCP_SIZE=6 \
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 \
@@ -313,12 +313,19 @@ CJK characters.
 
 TP6 validation used B12X attention and `VLLM_ENABLE_PCIE_ALLREDUCE=0`.
 
-The current `8722ac7/b12x8ce61f9` clean image was smoke-tested on
+The current `8722ac7/b12x15cd38c` clean image was smoke-tested on
 TP6/DCP6/MTP3 with the 78-character `index_topk_pattern`, graph cap `4`, and
 `max_num_seqs=1`. Logs showed `attention heads 64 -> 66`, B12X kernel padding
 `66 -> 80`, KV cache `1,068,888`, V2 runner, no `topk_scores_buffer` error,
 and coherent short plus 30k-context Sieve output with `0` CJK. Generation-only
 throughput was about `79-84 tok/s` on short context and `75-79 tok/s` at 30k.
+
+The same image was smoke-tested on TP8/DCP2/MTP3 with `B12X_MLA_SPARSE` and no
+explicit `VLLM_DCP_GLOBAL_TOPK` or `VLLM_DCP_SHARD_DRAFT` environment
+overrides. It started successfully, reported KV cache `1,289,728`, and
+produced coherent `/mnt/test.py -L` output with `0` CJK and about `96-98 tok/s`
+generation-only. This validates that the production DCP top-k and sharded-draft
+defaults are active without requiring legacy debug envs.
 
 | Mode | Attention | MTP | KV cache tokens | Short ctx tok/s | 30k ctx tok/s | 30k TTFT |
 |---|---|---:|---:|---:|---:|---:|

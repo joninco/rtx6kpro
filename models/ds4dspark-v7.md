@@ -90,6 +90,17 @@ Validated defaults for DSpark on are `GRAPH_CAP=512`,
 `GPU_MEMORY_UTILIZATION=0.92`, and `DSPARK_TOKENS=5`. For DSpark off use
 `GRAPH_CAP=256` and `GPU_MEMORY_UTILIZATION=0.90`.
 
+TileLang ignores `XDG_CACHE_HOME`, so keep its cache on the persistent `/cache`
+mount explicitly. Without these two environment variables, kernels such as
+`mhc_pre_big_fuse_with_norm_tilelang` are cached only under
+`/root/.tilelang/cache` inside the container layer and are recompiled after a
+new `docker run` or compose recreate:
+
+```text
+TILELANG_CACHE_DIR=/cache/tilelang
+TILELANG_TMP_DIR=/cache/tilelang/tmp
+```
+
 ```yaml
 services:
   ds4dspark:
@@ -127,6 +138,8 @@ services:
       TORCHINDUCTOR_CACHE_DIR: /cache/torchinductor
       TORCH_EXTENSIONS_DIR: /cache/torch_extensions
       FLASHINFER_WORKSPACE_BASE: /cache/flashinfer
+      TILELANG_CACHE_DIR: /cache/tilelang
+      TILELANG_TMP_DIR: /cache/tilelang/tmp
       MODEL_PATH: ${MODEL_PATH:-/root/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-V4-Flash-DSpark/snapshots/913f0657a874f76844e2e91cbe706dbcaceeb6d7}
       PORT: ${PORT:-8000}
       VARIANT: ${VARIANT:-lucifer-cutlass}

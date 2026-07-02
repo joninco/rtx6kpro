@@ -148,7 +148,10 @@ The helper always unsets `NCCL_GRAPH_FILE`, `NCCL_GRAPH_DUMP_FILE`, and
 ## Docker Compose Wrapper
 
 This compose file keeps only the knobs users usually change. It delegates the
-full command construction to `scripts/run-ds4-v8-server.sh`.
+full command construction to `scripts/run-ds4-v8-server.sh`. The default below
+starts the preferred DSpark path: Lucifer CUTLASS MoE with
+`FLASHINFER_MLA_SPARSE_DSV4` attention and B12X PCIe one-shot all-reduce for
+small decode all-reduces.
 
 ```yaml
 services:
@@ -167,17 +170,24 @@ services:
       PORT: ${PORT:-8000}
       GPUS: ${CUDA_VISIBLE_DEVICES:-0,1}
       TP: ${TP:-2}
-      BACKEND: ${BACKEND:-b12x}
-      MODE: ${MODE:-standard-mtp0}
+      BACKEND: ${BACKEND:-lucifer-cutlass}
+      MODE: ${MODE:-dspark}
       MAX_NUM_SEQS: ${MAX_NUM_SEQS:-64}
       CACHE: ${CACHE:-/root/.cache/vllm-ds4-v8/ds4-v8}
     command: ["scripts/run-ds4-v8-server.sh"]
 ```
 
-Example:
+Examples:
 
 ```bash
+# Preferred DSpark path: Lucifer CUTLASS MoE.
 BACKEND=lucifer-cutlass MODE=dspark TP=4 CUDA_VISIBLE_DEVICES=0,1,2,3 docker compose up
+
+# Lucifer default MoE DSpark path.
+BACKEND=lucifer-default MODE=dspark TP=4 CUDA_VISIBLE_DEVICES=0,1,2,3 docker compose up
+
+# B12X DSpark path.
+BACKEND=b12x MODE=dspark TP=4 CUDA_VISIBLE_DEVICES=0,1,2,3 docker compose up
 ```
 
 ## Full Sweep Command

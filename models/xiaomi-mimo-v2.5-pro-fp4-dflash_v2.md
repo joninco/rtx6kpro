@@ -8,15 +8,15 @@ in the shared Eldritch Enlightenment image.
 ## Image
 
 ```text
-voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629
-voipmonitor/vllm@sha256:534ad1a3f7e5877ee131b0ad886f6d372fd40b787a2bd2f3e98a40573d51ddcf
+voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x15cd38c-cu132-20260629
+voipmonitor/vllm@sha256:2ddd49e4ee162ea79a0f2e537aec3e18918bef168e3d684cfa5332151c7fbe2e
 ```
 
 | Component | Revision |
 |---|---|
 | vLLM | `codex/eldritch-head66-b12xmla-20260629 @ 8722ac7f8427919ed67bfe9c5e47b3cc30dfbf2e` |
 | MiMo fix | baked into the vLLM branch; no bind-mount overlay required |
-| B12X | `8ce61f9b8dbbb54e8d9cf46740d56f533cb2e7e7` |
+| B12X | `15cd38ce3f10ee5cb7db1179cbc7c88fd15e37b7` |
 | FlashInfer | `25dd814e03791e370f96c3148242f0dc8de504ac` |
 | DeepGEMM | `2073ddb2814892014c33ef4cd1c7d4c148baf1fe` |
 
@@ -64,7 +64,7 @@ kernel_unified_attention_diffkv
 ```yaml
 services:
   mimo25-dflash:
-    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629}
+    image: ${IMAGE:-voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x15cd38c-cu132-20260629}
     container_name: ${NAME:-mimo25-dflash-v2}
     network_mode: host
     ipc: host
@@ -139,7 +139,7 @@ services:
 ## Single Docker Run
 
 ```bash
-IMAGE=voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x8ce61f9-cu132-20260629
+IMAGE=voipmonitor/vllm:eldritch-enlightenment-v8722ac7-b12x15cd38c-cu132-20260629
 MODEL=/root/.cache/huggingface/hub/models--XiaomiMiMo--MiMo-V2.5-Pro-FP4-DFlash/snapshots/b754e6c86008bdb5cc901308dda5a38173ec7276
 CACHE=/root/.cache/vllm-mimo25-dflash-v2
 
@@ -166,7 +166,7 @@ docker run -d --name mimo25-dflash-v2 \
 Final image smoke was run on 8x RTX 6000 Pro Blackwell, TP8/DCP1, DFlash 7,
 FP8 KV, `TRITON_ATTN`, `flashinfer_cutlass` MoE, `linear_backend=b12x`.
 
-Current `8722ac7/b12x8ce61f9` clean-image smoke stayed on the fast
+Current `8722ac7/b12x15cd38c` clean-image smoke stayed on the fast
 `TRITON_ATTN` path, did not select a `DIFFKV` backend, used
 `FLASHINFER_CUTLASS_MXFP4_MXFP8` MoE, and reported KV cache `1,363,603`.
 `/mnt/test.py -L` returned coherent output with `0` CJK and roughly
