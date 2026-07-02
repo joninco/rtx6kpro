@@ -1,0 +1,120 @@
+# DSpark: ours vs upstream vLLM — consolidation study (2026-07-03)
+
+Upstream merged DSpark speculative decoding on 2026-07-01 ([#46995](https://github.com/vllm-project/vllm/pull/46995),
+follow-up [#47093](https://github.com/vllm-project/vllm/pull/47093) speculators/reduced-vocab). Ours predates it by 3 days
+(`279de1956f`, Luke, 2026-06-28 + TP4 TileLang follow-ups). **They are parallel implementations of the same
+algorithm — disjoint git histories — that even share file paths** (`vllm/models/deepseek_v4/nvidia/dspark.py`,
+`spec_decode/dspark/speculator.py`). This page: E2E + acceptance measurements, code-level comparison,
+and the consolidation/port plan.
+
+## 1. E2E results (DS4-Flash-DSpark, TP2, RTX PRO 6000)
+
+| | ours (eldritch 3f65c52 + b12x f416b75) | upstream nightly (post-#46995) |
+|---|---:|---:|
+| decode cc1 (512 tok) | **188.1 tok/s** | **does not start** |
+| coding gen-only (2k tok) | **278.0 tok/s** | — |
+| acceptance / draft token | **36.2 %** (5,773/15,940) | — (see §2) |
+| accepted per draft (+bonus) | 1.81 (+1 ⇒ ~2.81 tok/step) | — |
+| per-position acceptance (of 3,188 drafts) | 73.9 / 48.7 / 30.4 / 17.9 / 10.3 % | — |
+
+Ours config: seqs 64 / graph 512 / mbt 8192 / 128k len / A8 / `{"method":"dspark","num_speculative_tokens":5,"draft_sample_method":"probabilistic"}`.
+Consistent with the 2026-07-01 baseline (cc1 191.3 on b12x2387, prod cache/len deltas).
+
+### Why upstream shows "does not start": four independent SM120 blockers
+
+Peeled one at a time on `vllm/vllm-openai:nightly` (5 boot cycles):
+
+1. **DSpark crash at speculator init**: `AttributeError: 'DSparkDeepseekV4ForCausalLM' object has no
+   attribute 'draft_id_to_target_id'` — their #47093 reduced-vocab refactor broke the DSV4 draft;
+   fix sits in **open PR [#47429](https://github.com/vllm-project/vllm/pull/47429)** (we applied it manually to proceed).
+2. **Bundled DeepGEMM has no SM120 support**: `Assertion error (deepgemm-src/csrc/apis/layout.hpp:59):
+   Unknown SF transformation` during FP8 weight processing. (Our stack ships an SM120-patched DeepGEMM fork —
+   this is precisely the delta.)
+3. `VLLM_USE_DEEP_GEMM=0` fallback → **CUTLASS c3x `dispatch_scaled_mm` RuntimeError** — upstream has no
+   SM120 fp8-blockwise scaled-mm kernels either; `VLLM_TEST_FORCE_FP8_MARLIN=1` does not reroute the
+   blockwise path.
+4. **tilelang wheel broken in the image**: `libcudart_stub.so: undefined symbol: cudaDeviceReset`
+   (the DSV4 target needs TileLang for the HC head) — worked around by mounting the real libcudart over the stub.
+
+**Conclusion: pure upstream vLLM cannot serve DeepSeek-V4-Flash (with or without DSpark) on SM120 today.**
+Its DSpark speed on this hardware is therefore N/A; every layer that makes DS4 runnable here (SM120 DeepGEMM,
+b12x kernels, working TileLang) lives in our stack. A fair speed comparison would need SM90/SM100 hardware.
+
+## 2. Acceptance: theirs vs ours
+
+E2E acceptance for upstream is unmeasurable on this box, but the code answer is solid:
+
+- **Identical rejection scheme by default** — both trees share the same `_rejection_kernel`
+  (greedy: accept iff draft == target argmax; temp>0: Leviathan ratio test with the same seeding
+  granularity). At `num_speculative_tokens == dspark_block_size` the draft layouts are token-for-token
+  identical ⇒ **same expected acceptance on the same checkpoint**.
+- **Upstream likely LOSES acceptance when `N < dspark_block_size`**: they truncate the query block to N
+  (shape never seen in training); we always run the full trained block and slice (costs a little compute,
+  keeps fidelity).
+- **Upstream GAINS acceptance at temp>0 via `rejection_sample_method="block"`** (block verification,
+  #46781 + int64 fix #47383) — joint block acceptance with residual-mass reweighting. **We lack this
+  entirely** — the single biggest acceptance feature gap on our side.
+- Gumbel keying differs by one position offset (both self-consistent; second-order).
+- Our batch-wide draft suppression (prefix-cache window rebuild ⇒ 0-width drafts for the whole batch;
+  `len ≤ 1` ⇒ zero-token drafts for the whole batch) depresses *effective* tokens/step in mixed batches;
+  upstream proposes per-request unconditionally.
+
+## 3. Architecture comparison (condensed from three deep-dive analyses)
+
+**Draft model.** Ours (1,994 lines): self-contained, private per-request dense rolling KV window
+(no paged cache, layers popped from the forward context), bespoke **TileLang sparse block-attention
+kernel** (E2E-tuned: TP4-native h=16/block=32/threads=128 → 376.6 tok/s, beating the isolated-bench
+winner by 7% — another isolated-vs-E2E case), b12x fused WO/MHC, fake-FP8 QAT numerics matching
+training, confidence head, env-gated reference/debug harness. Upstream (488 lines): thin wrapper reusing
+the *target's* stack — stock decoder layers, **paged SWA draft KV** (`sparse_swa.py`, fp8_ds_mla layout),
+fused RoPE/quant/paged-insert CUDA ops, FlashMLA/FlashInfer sparse kernels (SM120 path *requires* fp8 KV),
+torch.compile on the draft.
+
+**Speculator.** Upstream rewrote DSpark as a subclass of their DFlash parallel-drafting framework:
+one fused Triton prep kernel writes all graph inputs (ids, positions, both slot mappings, padding) in
+place; per-request proposals; `pad_spec_decode` keeps uniform decode graphs when requests join;
+reduced-vocab d2t; EPLB hooks. Ours: standalone speculator with a per-step Python state machine for the
+private window (`_update_context_cache_state`), FlashInfer MoE autotune pinned to the draft block bucket,
+numerics hardening (fp64 acceptance uniforms, gumbel eps clamps), vectorized flatten kernel.
+
+**Verdict:** upstream's *integration architecture* is better (paged draft KV, fused prep, per-request
+robustness, ~10× less DSpark-specific code); **our *kernels and DSV4 fidelity* are better** (TileLang
+draft attention with fewer indirections wins single-stream; b12x fusions; full trained block; QAT-exact
+numerics). On this hardware ours is faster by construction — upstream's stack doesn't even run.
+
+## 4. Port plan (consolidation)
+
+**Upstream → ours (priority order):**
+1. **Block verification** (`rejection_sample_method="block"` kernels + config, incl. #47383 int64 casts) —
+   direct accepted-length win at temp>0, orthogonal to our drafter.
+2. **Scheduler `pad_spec_decode`** — uniform-decode FULL graphs survive requests joining a spec batch.
+3. Base-class `idx_mapping[num_reqs:].fill_(-1)` defense-in-depth (our active-row guard covers DSpark
+   only; audit eagle/mtp/autoregressive for stale-row corruption).
+4. Replace batch-wide suppression with per-request `-1` draft fill (and stop proposing token id 0 for
+   `len ≤ 1` anchors).
+5. Skip the dead confidence-head compute in `forward_head`.
+6. Longer term: paged draft-KV/SWA-group design (prefix caching + preemption without the trusted-window
+   state machine).
+
+**Ours → upstream (if Luke wants to upstream):**
+- TileLang draft attention as the SM120 path (their SM120 FlashInfer sparse path needs cubins that may
+  not ship); gumbel eps clamps + finite guard; fp64 acceptance uniforms; vectorized `_flatten_sampled`;
+  FlashInfer MoE autotune bucket for block-M; `requires_eagle_cache_drop` refinement; "run full trained
+  block when N < block_size" (fidelity); the #47429 one-liner is already ours-equivalent.
+
+**Kernel-level headroom on ours (draft pass):**
+1. Kill the two per-layer window copies (`cache_window` gather + `torch.cat`) — kernel reads split
+   (cache, draft) tensors, or allocate window+block contiguously and write the block into the tail.
+2. Hoist `_build_dspark_topk_idxs` out of the per-layer loop (layer-invariant; or fold the analytic
+   index into the kernel — no index tensor at all).
+3. m-fusion: one CTA per request processing all 5 draft queries (5× fewer KV re-reads; also solves the
+   TP8 h=8 padding waste).
+4. Do NOT: fp8 window in-kernel (latency-bound, not BW), PDL/relaxed atomics (−7 % E2E, measured),
+   block=64/FullCol (lost E2E by 7 %, measured).
+
+## 5. Bugs found along the way
+
+- **Ours**: `tests/v1/spec_decode/test_dspark.py` imports `_get_tilelang_block_size`/`_get_tilelang_padded_heads`
+  deleted by `29516ba9af` — the test file fails at import; needs updating.
+- **Upstream**: the #47429 crash (still open); nightly tilelang wheel broken stub; no SM120 story for
+  DS4 across three kernel layers.
