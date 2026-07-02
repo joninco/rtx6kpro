@@ -380,16 +380,47 @@ Falsified knobs (all measured):
   `barrier_count.zero_() + barrier_epoch.zero_()` (volatile_launch_state=True on the
   vLLM eager-bind path) + 2× small DtoD ≈ **3.0 µs/layer ≈ 0.18 ms/token**.
 
-Fix directions (both b12x-side, in expected-value order):
-1. **Micro-kernel variant that consumes the N256/K128 repacked layout** (micro already
-   has `a8_mx_mode`/`e8m0_scale_layout` hooks) — memory-neutral; per Luke's own 2.2×
-   micro-vs-dynamic measurement it should put A8 decode at or below a16's 22.5 µs/layer
-   → **A8 decode ≈143 t/s while keeping the A8 prefill advantage (+72% MoE at M=8192)**
-   — the best of both modes in one config, no trade-off left.
-2. Alternatively harden the dynamic kernel's M=1 band: widen to 8 warps/256 threads
-   (a16 gets 70% vs 55% DRAM util from exactly this), trim the +8.8% L2 byte overhead,
-   and fold the barrier re-zeroes into the kernel Phase-0 prologue (as its other
-   counters already are) to drop the 2 fills + 2 DtoD from the graph.
+### 6.8.2 Port groundwork completed (2026-07-02 evening session)
+
+The micro-port was attempted. Status:
+
+**Done and verified (PR #21, commit `123a16f`,
+`tests/test_w4a8_rp_inverse_mapping.py`):** both in-place repacks are pure
+power-of-two permutations with exact bitfield inverses, validated bit-exact against the
+real prep kernels for the w13 (rows=2n, rot=n) and w2 (rows=k) orientations, weights and
+e8m0 grids:
+
+```
+weights: p=(r-rot)%rows; nt=p>>8; row=p&255; n8c=row>>5; n8i=(row>>3)&3; r8=row&7
+         kt=w>>4; k32=(w&15)>>2; cgrp=w&3
+         off_words = (nt*k_tiles+kt)*4096 + (n8i | cgrp<<2 | r8<<4 | n8c<<7 | k32<<10)
+grids:   off_bytes = kb | row8<<2 | n32<<5 | (nt*k_tiles+kt)<<10   (kb=c&3, kt=c>>2)
+```
+
+(The sfb prep clamps e8m0 ≥ 249 — unreachable for real weights.) Zero extra weight
+memory: the kernel indexes the repacked buffers directly.
+
+**The decisive constraint found:** the rp 16 B-contiguous unit spans logical rows
+{r, r+8, r+16, r+24} at one k-window (the `n8i` mode). Direct-micro's FC1 dataflow is
+row-per-warp / 64 B-per-lane (`ld_global_nc_v4_u32` quads) — under rp its lanes land
+16 KB apart → ~12.5% sector efficiency. **A 1:1 address translation would destroy the
+DRAM efficiency the port exists to gain.** The register-resident dot-product + warp
+reduce choreography is built around the row-per-warp assignment, so preserving
+coalescing means redesigning the lane→(rows×k) map — i.e., authoring an rp-native
+tiny-M kernel, not porting micro.
+
+**Recommendation updated:** build the tiny-decode band as an **rp-native M≤8 mode of
+the dynamic-kernel family** (it already speaks this layout natively) rather than a
+micro port: 8 warps/256 threads (the a16 kernel's 70% vs 55% DRAM-util edge comes
+exactly from this; the (1,8,1) atom FPE in the SM120 helpers is the blocker to fix
+first), lanes covering four 8-apart rows per instruction per the mapping above, the
++8.8% L2 byte overhead trimmed, and barrier re-zeroes folded into Phase-0 (drops the 2
+fills + 2 DtoD ≈ 3 µs/layer from every decode graph). Target remains the a16 kernel's
+22.5 µs/layer at M=1 → **A8 decode ≈141–144 t/s with the A8 prefill advantage kept**.
+
+Falsified during the attempt (beyond §6.8.1): `atom_shape (1,8,1)` for the M16 band —
+hard `Floating point exception` in CuTe DSL layout construction (helpers support only
+the tested shapes).
 
 Per-M routing between w4a16 and w4a8_mx kernels was evaluated and is **not viable**:
 `required_weight_layout()` demands MMA_PACKED for w4a16 vs QMMA_REPACKED for w4a8_mx —
