@@ -118,3 +118,33 @@ numerics). On this hardware ours is faster by construction — upstream's stack 
   deleted by `29516ba9af` — the test file fails at import; needs updating.
 - **Upstream**: the #47429 crash (still open); nightly tilelang wheel broken stub; no SM120 story for
   DS4 across three kernel layers.
+
+
+## 6. Block verification port — implemented, measured, verdict (2026-07-03 night)
+
+Ported upstream's block verification into our tree (branch
+`fable/dspark-block-verification-20260703` @ local-inference-lab/vllm): wholesale adoption of their
+refactored `rejection_sampler_utils.py` (block kernels, int64-safe offsets) with our extras re-applied
+(fp64 acceptance uniforms, active-row-guarded gumbel), `rejection_sample_method: "block"` config,
+and a host-side **all-greedy skip** (the block prep kernels cost ~5–7 % of a step and are inert at temp 0
+— without the skip, greedy decode lost 7 % tok/s).
+
+**Testing strategy that made this fast** (2 boots total instead of ~10):
+1. *Synthetic kernel harness* (`optimization/code/tiny-decode/synth_rejection_test.py`): drives
+   `rejection_sample()` directly with controlled target/draft divergence. Seconds per iteration.
+   Results: temp-0 equivalence exact; distribution preservation (TVD within sampling bounds);
+   accepted length **+7–47 %** over standard across temp × draft-quality on Gaussian-noise drafts.
+2. *E2E with proper statistics*: 12×800-token probes ×3 per config at temp 0.7 (small probes have
+   ±9-point noise — trajectories are not run-to-run deterministic on this stack due to fp32-atomic
+   logit jitter; and first-run-after-boot reads low, again).
+
+**E2E verdict: no real-workload gain.** block 54.0/56.4/54.2 % vs standard 54.1/56.0/59.3 %
+(means 54.8 vs 56.5, spread ±3) — the DSpark draft's error structure is bimodal
+(agree-hard / diverge-hard), not the smooth likelihood-ratio spectrum where joint-ratio pooling wins.
+The +5-point gain seen in first small probes was sampling noise. **Kept opt-in, not default.**
+Value delivered anyway: consolidated rejection utils (upstream refactor + our hardening in one file),
+the synthetic harness as a permanent regression tool, and the measured-noise methodology
+(big paired probes or bust) for all future acceptance work.
+
+Next speed items from §4 remain open: draft-pass window-copy elimination, topk hoist, confidence-head
+skip, per-request suppression fix, pad_spec_decode.
