@@ -12,7 +12,7 @@ open questions are flagged.
 > **E2E-reproducible at 138.7–138.8 tok/s** DS4 TP2 A8 decode cc1 (baseline 133.7,
 > A16 reference 140.5). The §6 "restart variance" was solved: `sem='relaxed'` on the
 > atomic scatters — isolated-neutral but −7% E2E — was the regression; removed
-> (vLLM commit `e06e4030`-ish, see branch head).
+> (vLLM commit `8e6e417c`).
 
 ## Branches / commits
 
