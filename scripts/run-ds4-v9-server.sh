@@ -10,7 +10,7 @@ PORT=${PORT:-8000}
 GPUS=${GPUS:-0,1}
 TP=${TP:-2}
 BACKEND=${BACKEND:-b12x-a16}        # b12x|b12x-a16|b12x-a8|b12x-a8-dglin|lucifer-default|lucifer-cutlass
-MODE=${MODE:-dspark}                # standard-mtp0 | standard-mtp2 | dspark
+MODE=${MODE:-dspark}                # standard-mtp0 | standard-mtp2 | standard-mtp3 | dspark
 MAX_NUM_SEQS=${MAX_NUM_SEQS:-${SEQ:-64}}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-262144}
 MAX_BATCHED=${MAX_BATCHED:-8192}
@@ -22,6 +22,10 @@ GPU_MEM=${GPU_MEM:-0.90}
 GRAPH=${GRAPH:-auto}
 PREFIX_CACHE=${PREFIX_CACHE:-1}
 DSPARK_TOKENS=${DSPARK_TOKENS:-5}
+MTP_TOKENS_WAS_SET=0
+if [[ -n "${MTP_TOKENS+x}" ]]; then
+  MTP_TOKENS_WAS_SET=1
+fi
 MTP_TOKENS=${MTP_TOKENS:-2}
 SAMPLE=${SAMPLE:-probabilistic}
 CACHE=${CACHE:-/root/.cache/vllm-ds4-v9/$NAME}
@@ -44,9 +48,12 @@ case "$MODE" in
     SPEC_ARGS=()
     if [[ "$GRAPH" == "auto" ]]; then GRAPH=256; fi
     ;;
-  standard-mtp2)
+  standard-mtp2|standard-mtp3)
     MODEL=$STANDARD_MODEL
     SERVED_MODEL=DeepSeek-V4-Flash
+    if [[ "$MODE" == "standard-mtp3" && "$MTP_TOKENS_WAS_SET" == "0" ]]; then
+      MTP_TOKENS=3
+    fi
     if [[ "$BACKEND" == b12x* ]]; then
       SPEC_JSON=$(printf '{"method":"mtp","num_speculative_tokens":%s,"draft_sample_method":"%s","moe_backend":"b12x"}' "$MTP_TOKENS" "$SAMPLE")
     else
