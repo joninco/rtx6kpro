@@ -165,3 +165,21 @@ weight-streaming floor (~33 distinct experts × 6.3 MB × 61 layers), which refr
 
 The timing instrumentation (`VLLM_DSPARK_TIMING=1`) stays as the permanent per-change A/B tool.
 Remaining ideas are structural (fp8 draft window, cross-step expert dedup) with uncertain payoff.
+
+
+## 8. Full-B12X vs Lucifer CUTLASS on DSpark (2026-07-03)
+
+Paired fresh boots, warmed, cc64 measured twice per side (first-run cc64 is unreliable — FI autotune
+cold start measured 572→1927 on the hybrid; bench order matters too: cc64 after a 128k prefill sweep
+reads −15–20 %):
+
+| DSpark TP2 A8, k=5 | full B12X (f416b75) | Lucifer CUTLASS | winner |
+|---|---:|---:|---|
+| decode cc1 | 197.3 | 202.2 | ~tie (+2.5 % Lucifer) |
+| **decode cc64 aggregate** | 1,925 (30.1/user) | **2,331 (36.4/user)** | **Lucifer +21 %** |
+| prefill 8k / 64k / 128k | **12,972 / 12,875 / 12,067** | 12,201 / 12,194 / 11,314 | **B12X +6 %** |
+
+Hybrid (B12X attention + FI MoE) ≈ B12X at cc64 (1927) → the cc64 gap isn't MoE alone; Lucifer's
+attention path contributes at batch. **Serving guidance:** throughput deployments → Lucifer config;
+prefill/TTFT-heavy → full B12X. **Kernel work item for the b12x stream:** the dynamic w4a8 MoE band at
+M≈64–384 (spec-decode verify batches) trails FI CUTLASS MXFP4×MXFP8 by enough to cost −21 % E2E at cc64.
