@@ -148,3 +148,20 @@ the synthetic harness as a permanent regression tool, and the measured-noise met
 
 Next speed items from §4 remain open: draft-pass window-copy elimination, topk hoist, confidence-head
 skip, per-request suppression fix, pad_spec_decode.
+
+
+## 7. Speedup campaign results (2026-07-03)
+
+Profiled the step precisely first (CUDA-event instrumentation inside the graph-replay hot path —
+torch profiler cannot see inside FULL cudagraphs): **step ≈ 13.6–14.9 ms = target verify M=6
+~11.3 ms (83 %) + draft graph 2.01 ms + prep 0.33 ms.** The verify pass is near its
+weight-streaming floor (~33 distinct experts × 6.3 MB × 61 layers), which reframed the campaign:
+
+| lever | result |
+|---|---|
+| k-sweep (5→3→2) | **falsified**: 251 / 218 / 192 tok/s greedy — verify scales weakly with M, shorter blocks just lose tokens |
+| A16 MoE for DSpark | tie (244.5 vs 241.3) — the 0701 +9 % edge no longer reproduces on the f416b75 stack |
+| draft cleanup (confidence-head skip, per-step topk sharing, persistent window+block staging) | **landed**: draft graph-forward 2.01 → **1.81 ms/step** (−10 % draft, ~+1.4 % E2E), coherence clean; commit `16140bcb` |
+
+The timing instrumentation (`VLLM_DSPARK_TIMING=1`) stays as the permanent per-change A/B tool.
+Remaining ideas are structural (fp8 draft window, cross-step expert dedup) with uncertain payoff.
